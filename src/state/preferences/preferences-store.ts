@@ -7,6 +7,7 @@ import { spread } from '~/utils/object';
 import { storedSignal, storeValue } from '~/utils/stored-signal';
 
 import { StepDetailSection } from '../objectives/step-detail-section';
+import { BuildMeta } from './build-meta';
 import { initialPreferencesState, PreferencesState } from './preferences-state';
 
 @Service()
@@ -24,6 +25,7 @@ export class PreferencesStore extends Store<PreferencesState> {
   readonly powerUnit = this.select('powerUnit');
   readonly showTechLabels = this.select('showTechLabels');
   readonly states = this.select('states');
+  readonly buildMeta = this.select('buildMeta');
   readonly theme = this.select('theme');
   readonly hue = this.select('hue');
   readonly chroma = this.select('chroma');
@@ -32,7 +34,7 @@ export class PreferencesStore extends Store<PreferencesState> {
   readonly glpkAlgorithm = this.select('glpkAlgorithm');
 
   constructor() {
-    super(initialPreferencesState, ['states', 'flowSettings']);
+    super(initialPreferencesState, ['states', 'buildMeta', 'flowSettings']);
     const stored = this.stored();
     if (stored) {
       try {
@@ -93,7 +95,12 @@ export class PreferencesStore extends Store<PreferencesState> {
     this.update((state) => {
       const gameStates = spread(state.states[modId], { [id]: value });
       const states = spread(state.states, { [modId]: gameStates });
-      return { states };
+      const meta = spread(state.buildMeta[modId]?.[id] ?? {}, {
+        updatedAt: Date.now(),
+      });
+      const gameMeta = spread(state.buildMeta[modId], { [id]: meta });
+      const buildMeta = spread(state.buildMeta, { [modId]: gameMeta });
+      return { states, buildMeta };
     });
   }
 
@@ -101,7 +108,33 @@ export class PreferencesStore extends Store<PreferencesState> {
     this.update((state) => {
       const gameStates = this._removeEntry(state.states[modId], id);
       const states = spread(state.states, { [modId]: gameStates });
-      return { states };
+      const gameMeta = this._removeEntry(state.buildMeta[modId] ?? {}, id);
+      const buildMeta = spread(state.buildMeta, { [modId]: gameMeta });
+      return { states, buildMeta };
+    });
+  }
+
+  /** Renames a saved state, keeping its library details */
+  renameState(modId: string, from: string, to: string): void {
+    if (from === to) return;
+    this.update((state) => {
+      const gameStates = this._removeEntry(state.states[modId], from);
+      gameStates[to] = state.states[modId][from];
+      const states = spread(state.states, { [modId]: gameStates });
+      const gameMeta = this._removeEntry(state.buildMeta[modId] ?? {}, from);
+      const meta = state.buildMeta[modId]?.[from];
+      if (meta) gameMeta[to] = meta;
+      const buildMeta = spread(state.buildMeta, { [modId]: gameMeta });
+      return { states, buildMeta };
+    });
+  }
+
+  updateBuildMeta(modId: string, id: string, partial: BuildMeta): void {
+    this.update((state) => {
+      const meta = spread(state.buildMeta[modId]?.[id] ?? {}, partial);
+      const gameMeta = spread(state.buildMeta[modId], { [id]: meta });
+      const buildMeta = spread(state.buildMeta, { [modId]: gameMeta });
+      return { buildMeta };
     });
   }
 

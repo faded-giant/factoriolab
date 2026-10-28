@@ -1,0 +1,160 @@
+<div class="gap-1 flex flex-col">
+  <span class="mx-1 text-sm text-gray-300">{{
+    'library.saveCurrent' | translate
+  }}</span>
+  <div class="flex">
+    <input
+      type="text"
+      class="input grow"
+      [placeholder]="'library.name' | translate"
+      [(ngModel)]="saveName"
+      (keydown.enter)="save()"
+    />
+    <input
+      type="text"
+      class="input -ms-px w-40"
+      [placeholder]="'library.folder' | translate"
+      list="lab-library-folders"
+      [(ngModel)]="saveFolder"
+      (keydown.enter)="save()"
+    />
+    <button
+      type="button"
+      labButton
+      rounded="end"
+      class="-ms-px"
+      color="brand"
+      [faIcon]="faFloppyDisk"
+      labTooltip="library.save"
+      [attr.aria-label]="'library.save' | translate"
+      [disabled]="!saveName().trim()"
+      (click)="save()"
+    ></button>
+  </div>
+  <datalist id="lab-library-folders">
+    @for (folder of library.folderNames(); track folder) {
+      <option [value]="folder"></option>
+    }
+  </datalist>
+</div>
+
+<input
+  type="search"
+  class="input"
+  [placeholder]="'library.search' | translate"
+  [(ngModel)]="search"
+/>
+
+<div class="gap-3 flex scrollbar-thin flex-col overflow-y-auto">
+  @for (group of filtered(); track group.folder) {
+    <div class="flex flex-col">
+      <span class="mx-1 mb-1 gap-2 flex items-center text-sm text-gray-300">
+        <fa-icon [icon]="faFolder"></fa-icon>
+        {{ group.folder || ('library.unfiled' | translate) }}
+      </span>
+      @for (build of group.builds; track build.name) {
+        @if (editing() === build.name) {
+          <div class="gap-1 p-2 flex flex-col border border-gray-600">
+            <div class="flex">
+              <input
+                type="text"
+                class="input grow"
+                [placeholder]="'library.name' | translate"
+                [(ngModel)]="editName"
+              />
+              <input
+                type="text"
+                class="input -ms-px w-40"
+                [placeholder]="'library.folder' | translate"
+                list="lab-library-folders"
+                [(ngModel)]="editFolder"
+              />
+            </div>
+            <input
+              type="text"
+              class="input"
+              [placeholder]="'library.tags' | translate"
+              [(ngModel)]="editTags"
+            />
+            <textarea
+              class="input min-h-20"
+              [placeholder]="'library.notes' | translate"
+              [(ngModel)]="editNotes"
+            ></textarea>
+            <div class="gap-2 flex justify-end">
+              <button
+                type="button"
+                labButton
+                [faIcon]="faXmark"
+                text="cancel"
+                (click)="editing.set(null)"
+              ></button>
+              <button
+                type="button"
+                labButton
+                color="brand"
+                [faIcon]="faCheck"
+                text="library.save"
+                [disabled]="!editName().trim()"
+                (click)="saveEdit()"
+              ></button>
+            </div>
+          </div>
+        } @else {
+          <div
+            class="gap-2 px-1 flex items-center border-b border-gray-800 hover:bg-gray-800"
+          >
+            <button
+              type="button"
+              class="py-1 min-w-0 flex grow cursor-pointer flex-col text-left"
+              (click)="open(build)"
+            >
+              <span
+                class="truncate"
+                [class.text-brand-400]="build.name === library.current()"
+                >{{ build.name }}</span
+              >
+              @if (build.meta.notes) {
+                <span class="truncate text-sm text-gray-400">{{
+                  build.meta.notes
+                }}</span>
+              }
+            </button>
+            @for (tag of build.meta.tags ?? []; track tag) {
+              <span
+                class="px-1 rounded-xs shrink-0 border border-gray-600 text-xs text-gray-300"
+                >{{ tag }}</span
+              >
+            }
+            <span class="shrink-0 text-xs text-gray-400">{{
+              updated(build)
+            }}</span>
+            <button
+              type="button"
+              labButton
+              [border]="false"
+              [faIcon]="faPencil"
+              labTooltip="library.edit"
+              [attr.aria-label]="'library.edit' | translate"
+              (click)="edit(build)"
+            ></button>
+            <button
+              type="button"
+              labButton
+              [border]="false"
+              [faIcon]="faTrash"
+              labTooltip="delete"
+              [attr.aria-label]="'delete' | translate"
+              (click)="remove(build)"
+            ></button>
+          </div>
+        }
+      }
+    </div>
+  } @empty {
+    <span class="mx-1 text-sm text-gray-400">{{
+      (library.builds().length ? 'library.noMatches' : 'library.empty')
+        | translate
+    }}</span>
+  }
+</div>

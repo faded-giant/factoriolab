@@ -1,5 +1,6 @@
 import { computed, effect, inject, Service, signal } from '@angular/core';
 
+import { BuildMeta } from '~/state/preferences/build-meta';
 import { PreferencesStore } from '~/state/preferences/preferences-store';
 import {
   initialPreferencesState,
@@ -13,7 +14,7 @@ import { GitHubClient, GitHubConfig, GitHubError } from './github-client';
 export type SyncStatus = 'off' | 'idle' | 'syncing' | 'error';
 
 /** Contents of a build file in the sync repo */
-export interface BuildFile {
+export interface BuildFile extends BuildMeta {
   name: string;
   modId: string;
   query: string;
@@ -285,9 +286,14 @@ export class SyncStore {
   ): void {
     if (preferences != null) {
       try {
-        const { states: _states, ...initial } = initialPreferencesState;
+        const {
+          states: _states,
+          buildMeta: _buildMeta,
+          ...initial
+        } = initialPreferencesState;
         const remote = JSON.parse(preferences) as Partial<PreferencesState>;
         delete remote.states;
+        delete remote.buildMeta;
         this.preferencesStore.apply(spread(initial, remote));
       } catch {
         // Ignore an unreadable remote preferences file
@@ -297,24 +303,43 @@ export class SyncStore {
     if (!upserts.length && !removals.length) return;
 
     const states = { ...this.preferencesStore.states() };
+    const buildMeta = { ...this.preferencesStore.buildMeta() };
     for (const build of removals) {
-      if (!states[build.modId]) continue;
-      states[build.modId] = { ...states[build.modId] };
-      delete states[build.modId][build.name];
+      if (states[build.modId]) {
+        states[build.modId] = { ...states[build.modId] };
+        delete states[build.modId][build.name];
+      }
+      if (buildMeta[build.modId]) {
+        buildMeta[build.modId] = { ...buildMeta[build.modId] };
+        delete buildMeta[build.modId][build.name];
+      }
     }
-    for (const build of upserts)
-      states[build.modId] = { ...states[build.modId], [build.name]: build.query };
+    for (const build of upserts) {
+      const { name, modId, query, ...meta } = build;
+      states[modId] = { ...states[modId], [name]: query };
+      buildMeta[modId] = { ...buildMeta[modId], [name]: meta };
+    }
 
-    this.preferencesStore.apply({ states });
+    this.preferencesStore.apply({ states, buildMeta });
   }
 
   /** The files this browser's state maps to */
   private localFiles(state: PreferencesState): Files {
-    const { states, ...preferences } = state;
+    const { states, buildMeta, ...preferences } = state;
     const files: Files = { [PREFERENCES_FILE]: toJson(preferences) };
     for (const modId of Object.keys(states))
       for (const name of Object.keys(states[modId] ?? {})) {
-        const build: BuildFile = { name, modId, query: states[modId][name] };
+        const meta = buildMeta[modId]?.[name];
+        // Fixed key order, so the same build always serializes the same way
+        const build: BuildFile = {
+          name,
+          modId,
+          query: states[modId][name],
+          folder: meta?.folder || undefined,
+          tags: meta?.tags?.length ? meta.tags : undefined,
+          notes: meta?.notes || undefined,
+          updatedAt: meta?.updatedAt,
+        };
         files[buildPath(modId, name)] = toJson(build);
       }
 

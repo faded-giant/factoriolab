@@ -171,8 +171,8 @@ export class Preferences {
       })
       .subscribe((res) => {
         if (res === 1) {
-          // Do not reset saved states
-          const { states, ...state } =
+          // Do not reset saved states or their library details
+          const { states, buildMeta, ...state } =
             initialPreferencesState as Partial<PreferencesState>;
           this.preferencesStore.apply(state);
         } else if (res === 2) {
@@ -226,11 +226,11 @@ export class Preferences {
     if (!editValue || !editState || params == null) return;
 
     const modId = this.settingsStore.dataset().modId;
-    this.preferencesStore.saveState(modId, editValue, params);
-
     const state = this.selectedState();
     if (editState === 'edit' && state)
-      this.preferencesStore.removeState(modId, state);
+      this.preferencesStore.renameState(modId, state, editValue);
+
+    this.preferencesStore.saveState(modId, editValue, params);
 
     this.editStatus.set(null);
   }

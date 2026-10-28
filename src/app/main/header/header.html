@@ -53,6 +53,29 @@
       ></fa-icon>
     </lab-select>
   </div>
+  <div class="min-w-0 flex grow gap-px md:grow-0">
+    <lab-select
+      class="w-40 sm:w-64 min-w-0 grow"
+      rounded="start"
+      [border]="false"
+      placeholder="library.select"
+      [attr.aria-label]="'library.select' | translate"
+      [options]="library.options()"
+      [value]="library.current()"
+      (valueChange)="$event && library.open($event)"
+    ></lab-select>
+    <button
+      type="button"
+      labButton
+      rounded="end"
+      size="large"
+      [border]="false"
+      [faIcon]="faBookOpen"
+      labTooltip="library.header"
+      [attr.aria-label]="'library.header' | translate"
+      (click)="dialog.open(LibraryDialog)"
+    ></button>
+  </div>
   <button
     type="button"
     class="md:hidden"

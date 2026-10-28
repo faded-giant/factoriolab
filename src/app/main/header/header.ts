@@ -1,3 +1,4 @@
+import { Dialog } from '@angular/cdk/dialog';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -8,6 +9,7 @@ import {
 import { Router, RouterLink } from '@angular/router';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import {
+  faBookOpen,
   faChevronDown,
   faSliders,
   faUserGear,
@@ -18,9 +20,11 @@ import { Select } from '~/components/select/select';
 import { Tooltip } from '~/components/tooltip/tooltip';
 import { Game, gameOptions } from '~/data/game';
 import { gameInfo } from '~/data/game-info';
+import { Library } from '~/library/library';
 import { SettingsStore } from '~/state/settings/settings-store';
 import { TranslatePipe } from '~/translate/translate-pipe';
 
+import { LibraryDialog } from '../library-dialog/library-dialog';
 import { headerLinks } from './links';
 
 @Component({
@@ -44,12 +48,16 @@ import { headerLinks } from './links';
 export class Header {
   private readonly router = inject(Router);
   protected readonly settingsStore = inject(SettingsStore);
+  protected readonly dialog = inject(Dialog);
+  protected readonly library = inject(Library);
 
   readonly preferencesOpen = model.required<boolean>();
   readonly settingsOpen = model.required<boolean>();
   readonly settingsXlHidden = model.required<boolean>();
 
+  protected readonly faBookOpen = faBookOpen;
   protected readonly faChevronDown = faChevronDown;
+  protected readonly LibraryDialog = LibraryDialog;
   protected readonly faSliders = faSliders;
   protected readonly faUserGear = faUserGear;
   protected readonly game = this.settingsStore.game;

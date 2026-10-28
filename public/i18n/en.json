@@ -246,6 +246,23 @@
     "skip": "Skip",
     "welcome": "Welcome to <b>FactorioLab</b>! Let's get to work."
   },
+  "library": {
+    "deleteHeader": "Delete saved build?",
+    "deleteMessage": "This removes it from this browser and, if sync is on, from every machine. Its history stays in the GitHub repo.",
+    "edit": "Edit details",
+    "empty": "No saved builds for this game yet. Name the current build above to save it.",
+    "folder": "Folder",
+    "header": "Build library",
+    "name": "Name",
+    "noMatches": "No builds match your search.",
+    "notes": "Notes",
+    "save": "Save",
+    "saveCurrent": "Save current build",
+    "search": "Search names, folders, tags, notes",
+    "select": "Saved builds",
+    "tags": "Tags, comma separated",
+    "unfiled": "Unfiled"
+  },
   "modSet": "Mod set",
   "modSetTooltip": "Select which version or set of mods in Factorio to use",
   "modules": {

@@ -2,6 +2,7 @@ import { Theme } from '~/state/preferences/theme';
 import { Language } from '~/translate/language';
 
 import { StepDetailSection } from '../objectives/step-detail-section';
+import { BuildMeta } from './build-meta';
 import { ColumnsState, initialColumnsState } from './columns-state';
 import { FlowSettings, initialFlowSettings } from './flow-settings';
 import { GlpkAlgorithm } from './glpk-algorithm';
@@ -9,6 +10,7 @@ import { PowerUnit } from './power-unit';
 
 export interface PreferencesState {
   states: Record<string, Record<string, string>>;
+  buildMeta: Record<string, Record<string, BuildMeta>>;
   columns: ColumnsState;
   language: Language;
   powerUnit: PowerUnit;
@@ -28,6 +30,7 @@ export interface PreferencesState {
 
 export const initialPreferencesState: PreferencesState = {
   states: {},
+  buildMeta: {},
   columns: initialColumnsState,
   language: 'en',
   powerUnit: PowerUnit.Auto,
