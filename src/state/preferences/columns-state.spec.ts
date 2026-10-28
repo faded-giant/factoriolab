@@ -1,0 +1,31 @@
+import { TestBed } from '@angular/core/testing';
+
+import { Mocks } from '~/tests/mocks/mocks';
+import { TestModule } from '~/tests/test-module';
+
+import { gameColumnsState, initialColumnsState } from './columns-state';
+
+describe('gameColumnsState', () => {
+  let mocks: Mocks;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({ imports: [TestModule] });
+    mocks = TestBed.inject(Mocks);
+  });
+
+  it('should automatically hide columns invalid for the passed game', () => {
+    const data = mocks.getDataset();
+    data.wagonIds = [];
+    data.beaconIds = [];
+    data.flags = new Set();
+
+    const result = gameColumnsState(
+      { ...initialColumnsState, test: 'test' } as any,
+      data,
+    );
+    expect(result.wagons?.show).toBeUndefined();
+    expect(result.beacons?.show).toBeUndefined();
+    expect(result.pollution?.show).toBeUndefined();
+    expect((result as any).test).toBeUndefined();
+  });
+});

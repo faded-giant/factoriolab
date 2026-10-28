@@ -1,0 +1,75 @@
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  input,
+} from '@angular/core';
+import {
+  FaIconComponent,
+  IconDefinition,
+} from '@fortawesome/angular-fontawesome';
+import { cva } from 'class-variance-authority';
+
+import { IconType } from '~/data/icon-type';
+import { SettingsStore } from '~/state/settings/settings-store';
+
+import { IsLightPipe } from './is-light-pipe';
+
+const host = cva('relative inline-flex shrink-0 overflow-hidden', {
+  variants: {
+    full: {
+      true: 'size-16',
+      false: 'size-8',
+    },
+  },
+});
+
+// Account for non-standard rem values in sizing of icons by applying zoom.
+const fontSize = window.getComputedStyle(document.documentElement).fontSize;
+const fontSizePx = parseInt(fontSize);
+const zoom = (fontSizePx / 16) * 100;
+
+@Component({
+  selector: 'lab-icon',
+  imports: [FaIconComponent, IsLightPipe],
+  templateUrl: './icon.html',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { '[class]': 'hostClass()' },
+})
+export class Icon {
+  protected readonly settingsStore = inject(SettingsStore);
+
+  readonly value = input.required<string | IconDefinition>();
+  readonly type = input<IconType>();
+  readonly text = input<string>();
+  readonly alt = input<string>();
+  readonly iconText = input<string>();
+  readonly full = input<boolean>(false);
+  readonly qualityUrl = input<string>();
+
+  protected readonly zoom = zoom;
+  protected readonly hostClass = computed(() => host({ full: this.full() }));
+
+  protected readonly icon = computed(() => {
+    const value = this.value();
+    const type = this.type();
+    if (typeof value !== 'string' || type === 'img') return undefined;
+    const record = this.settingsStore.dataset().iconRecord;
+    if (type) return record[type][value];
+    return record.game[value] ?? record.system[value];
+  });
+
+  protected readonly faIcon = computed(() => {
+    const value = this.value();
+    if (typeof value === 'string') return undefined;
+    return value;
+  });
+
+  protected readonly src = computed(() => {
+    const value = this.value();
+    const type = this.type();
+    if (typeof value === 'string' && type === 'img') return value;
+    return undefined;
+  });
+}

@@ -1,0 +1,73 @@
+<div class="gap-y-1 flex flex-wrap">
+  <div class="md:w-auto relative flex w-full grow">
+    <input
+      class="input square rounded-s-xs"
+      [placeholder]="'filter' | translate"
+      [(ngModel)]="filterText"
+    />
+    <fa-icon
+      class="top-2.5 right-2 pointer-events-none absolute z-3 text-gray-500"
+      [icon]="faMagnifyingGlass"
+    ></fa-icon>
+  </div>
+  <lab-checkbox
+    class="md:border-s-0 md:grow-0 grow border border-gray-700"
+    label="technologies.unlockAll"
+    [ngModel]="allSelected()"
+    (ngModelChange)="selectAll($event)"
+  ></lab-checkbox>
+  <lab-checkbox
+    class="md:grow-0 grow border border-s-0 border-gray-700"
+    label="technologies.showLabels"
+    [ngModel]="preferencesStore.showTechLabels()"
+    (ngModelChange)="preferencesStore.apply({ showTechLabels: $event })"
+  ></lab-checkbox>
+  <button
+    type="button"
+    class="md:grow-0 -ms-px grow"
+    rounded="end"
+    labButton
+    [faIcon]="faFileImport"
+    text="technologies.import"
+    labTooltip="technologies.importTooltip"
+    (click)="openImport()"
+  ></button>
+</div>
+
+<div class="gap-2 flex flex-col overflow-y-scroll">
+  <lab-technologies-set
+    text="technologies.available"
+    [ids]="status().available"
+    (toggleId)="toggleId($event)"
+  ></lab-technologies-set>
+  <lab-technologies-set
+    text="technologies.locked"
+    [ids]="status().locked"
+    color="complement"
+    (toggleId)="toggleId($event)"
+  ></lab-technologies-set>
+  <lab-technologies-set
+    text="technologies.researched"
+    [ids]="status().researched"
+    color="brand"
+    (toggleId)="toggleId($event)"
+  ></lab-technologies-set>
+</div>
+
+<div class="gap-1 sm:gap-2 flex justify-end">
+  <button
+    type="button"
+    labButton
+    text="ok"
+    [faIcon]="faCheck"
+    color="brand"
+    (click)="dialogRef.close()"
+  ></button>
+  <button
+    type="button"
+    labButton
+    text="cancel"
+    [faIcon]="faXmark"
+    (click)="dialogRef.close(false)"
+  ></button>
+</div>

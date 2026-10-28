@@ -1,0 +1,59 @@
+<div class="gap-4 flex flex-col">
+  @if (settingsStore.game() === 'factorio') {
+    <div class="flex flex-wrap">
+      <span
+        class="rounded-s-xs px-2 flex items-center border border-gray-700"
+        >{{ 'technologies.exportFromFactorio' | translate }}</span
+      >
+      <button
+        type="button"
+        class="-ms-px"
+        labButton
+        rounded="none"
+        [faIcon]="faCopy"
+        [text]="copyText()"
+        (click)="copyScript()"
+      ></button>
+      <a
+        href="https://mods.factorio.com/mod/export-researched-technologies"
+        target="_blank"
+        class="-ms-px"
+        labButton
+        rounded="end"
+        [faIcon]="faLink"
+        text="technologies.exportUseMod"
+      ></a>
+    </div>
+  }
+
+  <div class="gap-2 flex flex-col">
+    <div id="import-instructions">
+      {{ 'technologies.importInstructions' | translate }}
+    </div>
+    <textarea
+      class="input w-full"
+      rows="10"
+      aria-labelledby="import-instructions"
+      [(ngModel)]="value"
+      (keydown.enter)="save()"
+    ></textarea>
+  </div>
+</div>
+
+<div class="gap-1 sm:gap-2 flex justify-end">
+  <button
+    type="button"
+    labButton
+    text="ok"
+    [faIcon]="faCheck"
+    color="brand"
+    (click)="save()"
+  ></button>
+  <button
+    type="button"
+    labButton
+    text="cancel"
+    [faIcon]="faXmark"
+    (click)="dialogRef.close()"
+  ></button>
+</div>

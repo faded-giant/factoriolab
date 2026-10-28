@@ -1,0 +1,203 @@
+import { Service } from '@angular/core';
+
+import { Beacon } from '~/data/schema/beacon';
+import { Item } from '~/data/schema/item';
+import { Machine } from '~/data/schema/machine';
+import { filterEffect } from '~/data/schema/module';
+import { Recipe } from '~/data/schema/recipe';
+import { Option } from '~/option/option';
+import { Rational, rational } from '~/rational/rational';
+import { fnPropsNotNullish } from '~/utils/nullish';
+
+import { ModuleSettings } from './module-settings';
+import { Dataset } from './settings/dataset';
+import { Settings } from './settings/settings';
+
+@Service()
+export class Options {
+  /** Determines what option to use based on preferred rank */
+  bestMatch(options: Option[], rank: string[]): string | undefined {
+    const ids = options.map((o) => o.value);
+    if (ids.length > 1) {
+      for (const r of rank) {
+        // Return first matching option in rank list
+        if (ids.includes(r)) return r;
+      }
+    }
+
+    return ids[0];
+  }
+
+  logisticsOptions(
+    item: Item,
+    settings: Settings,
+    data: Dataset,
+    type: 'wagon' | 'belt',
+  ): Option[] {
+    if (!item.types?.size) return [];
+
+    const types = item.types;
+    const collection = `${type}Ids` as const;
+    let allowedEntities = data[collection]
+      .map((b) => data.itemRecord[b])
+      .filter(fnPropsNotNullish(type))
+      .filter(
+        (b) =>
+          !types.isDisjointFrom(b[type].itemTypes) &&
+          (b.quality == null || (type === 'belt' && b[type]?.quality != null)),
+      );
+    if (allowedEntities.some((f) => settings.availableItemIds.has(f.id)))
+      allowedEntities = allowedEntities.filter((f) =>
+        settings.availableItemIds.has(f.id),
+      );
+    return allowedEntities.map(
+      (f): Option => ({
+        value: f.id,
+        label: f.name,
+        icon: f.id,
+        iconType: 'item',
+        tooltip: f.id,
+        tooltipType: type,
+      }),
+    );
+  }
+
+  machineOptions(recipe: Recipe, settings: Settings, data: Dataset): Option[] {
+    if (recipe.producers == null) return [];
+    let machineIds = recipe.producers.filter(
+      (p) =>
+        settings.availableItemIds.has(p) &&
+        (data.machineRecord[p].locations == null ||
+          data.machineRecord[p].locations.some((l) =>
+            settings.locationIds.has(l),
+          )),
+    );
+    if (machineIds.length === 0) machineIds = recipe.producers;
+    return machineIds.map((m) => ({
+      value: m,
+      label: data.itemRecord[m].name,
+      icon: m,
+      iconType: 'item',
+      tooltip: m,
+      tooltipType: 'machine',
+    }));
+  }
+
+  fuelOptions(entity: Machine, settings: Settings, data: Dataset): Option[] {
+    if (entity.fuel) {
+      const fuel = data.itemRecord[entity.fuel];
+      return [{ value: fuel.id, label: fuel.name }];
+    }
+
+    if (!entity.fuelTypes?.size) return [];
+
+    const fuelTypes = entity.fuelTypes;
+    let allowedIds = data.fuelIds
+      .map((f) => data.itemRecord[f])
+      .filter(fnPropsNotNullish('fuel'))
+      .filter((f) => !fuelTypes.isDisjointFrom(f.fuel.types));
+    if (allowedIds.some((f) => settings.availableItemIds.has(f.id)))
+      allowedIds = allowedIds.filter((f) =>
+        settings.availableItemIds.has(f.id),
+      );
+    return allowedIds.map(
+      (f): Option => ({
+        value: f.id,
+        label: f.name,
+        icon: f.id,
+        iconType: 'item',
+        tooltip: f.id,
+        tooltipType: 'fuel',
+      }),
+    );
+  }
+
+  moduleOptions(
+    entity: Machine | Beacon,
+    settings: Settings,
+    data: Dataset,
+    recipeId?: string,
+  ): Option[] {
+    // Get all modules
+    let allowed = data.moduleIds
+      .map((i) => data.itemRecord[i])
+      .filter(fnPropsNotNullish('module'))
+      .filter((m) => settings.availableItemIds.has(m.id));
+
+    let recipe: Recipe | undefined;
+    if (recipeId != null) {
+      recipe = data.recipeRecord[recipeId];
+      if (
+        Object.keys(data.limitations).length &&
+        (!data.flags.has('miningTechnologyBypassLimitations') ||
+          (!recipe.flags.has('mining') && !recipe.flags.has('technology')))
+      ) {
+        // Filter for modules allowed on this recipe
+        allowed = allowed.filter(
+          (m) =>
+            !m.module.limitation ||
+            data.limitations[m.module.limitation][recipeId],
+        );
+      }
+
+      if (recipe.disallowedEffects) {
+        for (const disallowedEffect of recipe.disallowedEffects) {
+          allowed = allowed.filter((m) =>
+            filterEffect(m.module, disallowedEffect),
+          );
+        }
+      }
+    }
+
+    // Filter for modules allowed on this entity
+    if (entity.disallowedEffects) {
+      for (const disallowedEffect of entity.disallowedEffects) {
+        allowed = allowed.filter((m) =>
+          filterEffect(m.module, disallowedEffect),
+        );
+      }
+    }
+
+    const options = allowed.map(
+      (m): Option => ({
+        value: m.id,
+        label: m.name,
+        icon: m.id,
+        iconType: 'item',
+        tooltip: m.id,
+        tooltipType: 'module',
+      }),
+    );
+    if (
+      (!data.flags.has('resourcePurity') || !recipe?.flags.has('mining')) &&
+      !data.flags.has('duplicators')
+    ) {
+      options.unshift({
+        label: 'none',
+        value: '',
+        icon: 'module',
+      });
+    }
+    return options;
+  }
+
+  /** Determines default modules for a recipe/machine */
+  defaultModules(
+    options: Option[],
+    moduleRankIds: string[],
+    count: Rational | true | undefined,
+    machineValue?: ModuleSettings[],
+  ): ModuleSettings[] | undefined {
+    if (count == null) return undefined;
+
+    if (machineValue) {
+      const set = new Set(options.map((o) => o.value));
+      if (machineValue.every((m) => m.id != null && set.has(m.id)))
+        return machineValue;
+    }
+
+    const id = this.bestMatch(options, moduleRankIds);
+    count = count === true ? rational.zero : count;
+    return [{ id, count }];
+  }
+}

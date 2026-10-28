@@ -1,0 +1,24 @@
+<div [class]="checkClass()">
+  <input
+    [id]="controlId()"
+    type="checkbox"
+    class="size-9 z-2 cursor-pointer opacity-0"
+    [attr.aria-label]="ariaLabel() | translate"
+    [attr.aria-labelledby]="labelledBy()"
+    [disabled]="disabled()"
+    [ngModel]="value()"
+    (ngModelChange)="setValue($event)"
+  />
+  <fa-icon
+    class="after:size-4 absolute *:z-1 after:absolute after:content-['']"
+    [class]="value() !== false ? 'after:bg-white' : ''"
+    size="xl"
+    [icon]="icon()"
+  ></fa-icon>
+</div>
+
+@if (label(); as label) {
+  <label [for]="controlId()" class="ps-1 pe-2 cursor-pointer select-none">{{
+    label | translate: labelParams()
+  }}</label>
+}

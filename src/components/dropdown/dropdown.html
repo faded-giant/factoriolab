@@ -1,0 +1,48 @@
+<div
+  class="px-0.5 flex select-none group-hover:opacity-40"
+  [class.opacity-40]="opened()"
+>
+  <ng-content></ng-content>
+</div>
+
+<fa-icon
+  class="pointer-events-none absolute text-brand-400 transition-transform group-hover:flex"
+  [class.hidden]="!opened()"
+  [class.rotate-90]="opened()"
+  [icon]="faGear"
+></fa-icon>
+
+<ng-template
+  cdkConnectedOverlay
+  [cdkConnectedOverlayOrigin]="overlayOrigin"
+  [cdkConnectedOverlayOpen]="opened()"
+  (overlayOutsideClick)="toggle()"
+>
+  <div
+    [id]="controlId() + '-menu'"
+    role="dialog"
+    class="mt-1 gap-2 rounded-xs p-4 flex origin-top flex-col border border-gray-600 bg-ground-950 transition-all starting:scale-y-75 starting:opacity-0"
+    animate.leave="animate-fade-y"
+  >
+    <ng-container [ngTemplateOutlet]="content()"></ng-container>
+    <div class="gap-2 flex">
+      <button
+        type="button"
+        class="grow"
+        labButton
+        color="brand"
+        [faIcon]="faCheck"
+        text="ok"
+        (click)="toggle()"
+      ></button>
+      <button
+        type="button"
+        class="grow"
+        labButton
+        [faIcon]="faXmark"
+        text="cancel"
+        (click)="opened.set(false)"
+      ></button>
+    </div>
+  </div>
+</ng-template>

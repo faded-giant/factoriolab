@@ -1,0 +1,14 @@
+<button
+  type="button"
+  labButton
+  [icon]="itemId()"
+  [toggleIcon]="faEyeSlash"
+  [toggled]="excluded()"
+  iconType="item"
+  [labTooltip]="itemId()"
+  labTooltipType="item"
+  labTooltipPosition="adjacent"
+  [labTooltipAction]="tooltip()"
+  [attr.aria-label]="tooltip() | translate"
+  (click)="changeItemExcluded()"
+></button>

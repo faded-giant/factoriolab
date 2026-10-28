@@ -1,0 +1,5 @@
+{
+  "excludedRecipes": [],
+  "minBeltRank": ["drone-rail-t1"],
+  "maxBeltRank": ["drone-rail-t5"]
+}

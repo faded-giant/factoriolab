@@ -1,0 +1,78 @@
+{
+  "beacon": "beacon",
+  "fuelRank": ["coal"],
+  "presets": [
+    {
+      "id": 0,
+      "label": "options.preset.minimum",
+      "beltStack": 1,
+      "machineRank": [
+        "electric-mining-drill",
+        "stone-furnace",
+        "assembling-machine-1",
+        "chemical-plant"
+      ],
+      "beltRank": ["transport-belt", "pump"]
+    },
+    {
+      "id": 1,
+      "label": "options.preset.upgraded",
+      "beltStack": 1,
+      "machineRank": [
+        "electric-mining-drill",
+        "electric-furnace",
+        "assembling-machine-3",
+        "chemical-plant"
+      ],
+      "beltRank": ["express-transport-belt", "pump"]
+    },
+    {
+      "id": 2,
+      "label": "options.preset.beacon2",
+      "machineRank": [
+        "big-mining-drill",
+        "foundry",
+        "electric-furnace",
+        "electromagnetic-plant",
+        "cryogenic-plant",
+        "chemical-plant",
+        "biochamber",
+        "assembling-machine-3",
+        "biolab"
+      ],
+      "moduleRank": ["productivity-module-3", "speed-module-3"],
+      "beacon": "beacon",
+      "beaconCount": 2,
+      "beaconModule": "speed-module-3",
+      "beltRank": ["turbo-transport-belt", "pump"]
+    },
+    {
+      "id": 5,
+      "label": "options.preset.legendary",
+      "machineRank": [
+        "big-mining-drill(5)",
+        "pumpjack(5)",
+        "offshore-pump(5)",
+        "foundry(5)",
+        "electromagnetic-plant(5)",
+        "cryogenic-plant(5)",
+        "assembling-machine-3(5)",
+        "electric-furnace(5)",
+        "oil-refinery(5)",
+        "chemical-plant(5)",
+        "biochamber(5)",
+        "centrifuge(5)",
+        "crusher(5)",
+        "recycler(5)",
+        "biolab(5)"
+      ],
+      "moduleRank": ["productivity-module-3(5)", "speed-module-3(5)"],
+      "beacon": "beacon(5)",
+      "beaconCount": 2,
+      "beaconModule": "speed-module-3(5)",
+      "beltRank": ["turbo-transport-belt", "pump(5)"]
+    }
+  ],
+  "beltRank": ["transport-belt", "pump"],
+  "wagonRank": ["cargo-wagon", "fluid-wagon"]
+}

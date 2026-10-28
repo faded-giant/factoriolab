@@ -1,0 +1,146 @@
+import { Rational, rational } from '~/rational/rational';
+import { coalesce } from '~/utils/nullish';
+import { spread } from '~/utils/object';
+import { cloneRecord, toRationalRecord, toRecordEntries } from '~/utils/record';
+
+import { itemHasQuality, ItemJson } from './item';
+import { ModuleEffect } from './module';
+import { Quality } from './quality';
+
+export type RecipeFlag =
+  | 'mining'
+  | 'technology'
+  /** Factorio: quality seed grows a normal tree */
+  | 'plant'
+  | 'burn'
+  | 'recycling'
+  | 'locked'
+  /** Unaffected by Satisfactory recipe cost multiplier (e.g. fluid packaging) */
+  | 'noCostMultiplier'
+  /** Treats machines required as a percentage instead of a number */
+  | 'infinite'
+  /** Even if there are no producers, show the machine quantity */
+  | 'showCount';
+
+export interface RecipeJson {
+  id: string;
+  name: string;
+  category?: string;
+  row?: number;
+  time: number | string;
+  in: Partial<Record<string, number | string>>;
+  out: Partial<Record<string, number | string>>;
+  producers?: string[];
+  /** Denotes amount of output that is not affected by productivity */
+  catalyst?: Partial<Record<string, number | string>>;
+  cost?: number | string;
+  /** If recipe is a rocket launch, indicates the rocket part recipe used */
+  part?: string;
+  /** Used to link the recipe to an alternate icon id */
+  icon?: string;
+  /** Used to add extra text to an already defined icon */
+  iconText?: string;
+  /** Used to override the machine's usage for this recipe */
+  usage?: number | string;
+  disallowedEffects?: ModuleEffect[];
+  locations?: string[];
+  flags?: RecipeFlag[];
+}
+
+export interface Recipe {
+  id: string;
+  name: string;
+  category?: string;
+  row: number;
+  time: Rational;
+  in: Partial<Record<string, Rational>>;
+  out: Partial<Record<string, Rational>>;
+  producers?: string[];
+  /** Denotes amount of output that is not affected by productivity */
+  catalyst?: Partial<Record<string, Rational>>;
+  cost?: Rational;
+  /** If recipe is a rocket launch, indicates the rocket part recipe used */
+  part?: string;
+  /** Used to link the recipe to an alternate icon id */
+  icon?: string;
+  /** Used to add extra text to an already defined icon */
+  iconText?: string;
+  usage?: Rational;
+  drain?: Rational;
+  consumption?: Rational;
+  pollution?: Rational;
+  quality?: Quality;
+  disallowedEffects?: ModuleEffect[];
+  locations?: string[];
+  flags: Set<RecipeFlag>;
+}
+
+export function parseRecipe(json: RecipeJson): Recipe {
+  return {
+    id: json.id,
+    name: json.name,
+    category: json.category,
+    row: coalesce(json.row, 0),
+    time: rational(json.time),
+    producers: json.producers,
+    in: toRationalRecord(json.in),
+    out: toRationalRecord(json.out),
+    catalyst: toRationalRecord(json.catalyst),
+    cost: rational(json.cost),
+    part: json.part,
+    icon: json.icon,
+    iconText: json.iconText,
+    usage: rational(json.usage),
+    disallowedEffects: json.disallowedEffects,
+    locations: json.locations,
+    flags: new Set(json.flags),
+  };
+}
+
+export function cloneRecipe(recipe: Recipe): Recipe {
+  return spread(recipe, {
+    in: cloneRecord(recipe.in),
+    out: cloneRecord(recipe.out),
+    catalyst: cloneRecord(recipe.catalyst),
+  });
+}
+
+export interface AdjustedRecipe extends Recipe {
+  effects: Record<ModuleEffect, Rational>;
+  produces: Set<string>;
+  output: Record<string, Rational>;
+}
+
+export function finalizeRecipe(recipe: AdjustedRecipe): void {
+  for (const [outId, output] of toRecordEntries(recipe.out)) {
+    if (
+      output.gt(rational.zero) &&
+      (recipe.in[outId] == null || recipe.in[outId].lt(output))
+    )
+      recipe.produces.add(outId);
+
+    recipe.output[outId] = output
+      .sub(recipe.in[outId] ?? rational.zero)
+      .div(recipe.time);
+  }
+
+  for (const [inId, input] of toRecordEntries(recipe.in).filter(
+    ([key]) => recipe.out[key] == null,
+  )) {
+    recipe.output[inId] = input.inverse().div(recipe.time);
+  }
+}
+
+export function recipeHasQuality(
+  recipe: Recipe | RecipeJson,
+  itemData: Record<string, ItemJson>,
+): boolean {
+  const flags = new Set(recipe.flags);
+  return (
+    recipe.part == null &&
+    !flags.has('mining') &&
+    (!flags.has('technology') || Object.keys(recipe.in).length > 0) &&
+    !flags.has('burn') &&
+    Object.keys(recipe.in).some((k) => itemHasQuality(itemData[k]))
+  );
+}

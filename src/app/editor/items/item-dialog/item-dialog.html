@@ -1,0 +1,170 @@
+<table class="lab-table">
+  <tbody>
+    <tr>
+      <th id="types-header">
+        {{ 'data.types' | translate }}
+      </th>
+      <td>
+        <input
+          type="text"
+          aria-labelledby="types-header"
+          class="input"
+          [placeholder]="'data.types' | translate"
+          [ngModel]="data.item.types | setJoin"
+          [ngModelOptions]="{ updateOn: 'blur' }"
+          (ngModelChange)="data.item.types = toArray($event)"
+        />
+      </td>
+    </tr>
+    <tr>
+      <th id="stack-header">{{ 'data.stackSize' | translate }}</th>
+      <td>
+        <input
+          type="number"
+          aria-labelledby="stack-header"
+          class="input"
+          size="3"
+          [placeholder]="'data.stackSize' | translate"
+          [(ngModel)]="data.item.stack"
+        />
+      </td>
+    </tr>
+    <tr>
+      <th id="rocket-capacity-header">
+        {{ 'data.rocketCapacity' | translate }}
+      </th>
+      <td>
+        <input
+          type="number"
+          aria-labelledby="rocket-capacity-header"
+          class="input"
+          size="4"
+          [placeholder]="'data.rocketCapacity' | translate"
+          [(ngModel)]="data.item.rocketCapacity"
+        />
+      </td>
+    </tr>
+    <tr>
+      <th id="beacon-header">{{ 'data.beacon' | translate }}</th>
+      <td>
+        <button
+          type="button"
+          labButton
+          [attr.aria-label]="'data.beacon' | translate"
+          [color]="data.item.beacon ? 'brand' : 'gray'"
+          [faIcon]="data.item.beacon ? faPencil : faPlus"
+          (click)="editBeacon(data.item)"
+        ></button>
+      </td>
+    </tr>
+    <tr>
+      <th id="belt-header">{{ 'data.belt' | translate }}</th>
+      <td>
+        <button
+          type="button"
+          labButton
+          [attr.aria-label]="'data.belt' | translate"
+          [color]="data.item.belt ? 'brand' : 'gray'"
+          [faIcon]="data.item.belt ? faPencil : faPlus"
+          (click)="editBelt(data.item)"
+        ></button>
+      </td>
+    </tr>
+    <tr>
+      <th id="machine-header">{{ 'data.machine' | translate }}</th>
+      <td>
+        <button
+          type="button"
+          labButton
+          [attr.aria-label]="'data.machine' | translate"
+          [color]="data.item.machine ? 'brand' : 'gray'"
+          [faIcon]="data.item.machine ? faPencil : faPlus"
+          (click)="editMachine(data.item)"
+        ></button>
+      </td>
+    </tr>
+    <tr>
+      <th id="module-header">{{ 'data.module' | translate }}</th>
+      <td>
+        <button
+          type="button"
+          labButton
+          [attr.aria-label]="'data.module' | translate"
+          [color]="data.item.module ? 'brand' : 'gray'"
+          [faIcon]="data.item.module ? faPencil : faPlus"
+          (click)="editModule(data.item)"
+        ></button>
+      </td>
+    </tr>
+    <tr>
+      <th id="fuel-header">{{ 'data.fuel' | translate }}</th>
+      <td>
+        <button
+          type="button"
+          labButton
+          [attr.aria-label]="'data.fuel' | translate"
+          [color]="data.item.fuel ? 'brand' : 'gray'"
+          [faIcon]="data.item.fuel ? faPencil : faPlus"
+          (click)="editFuel(data.item)"
+        ></button>
+      </td>
+    </tr>
+    <tr>
+      <th id="wagon-header">{{ 'data.wagon' | translate }}</th>
+      <td>
+        <button
+          type="button"
+          labButton
+          [attr.aria-label]="'data.wagon' | translate"
+          [color]="data.item.wagon ? 'brand' : 'gray'"
+          [faIcon]="data.item.wagon ? faPencil : faPlus"
+          (click)="editWagon(data.item)"
+        ></button>
+      </td>
+    </tr>
+    <tr>
+      <th id="technology-header">{{ 'data.technology' | translate }}</th>
+      <td>
+        <button
+          type="button"
+          labButton
+          [attr.aria-label]="'data.technology' | translate"
+          [color]="data.item.technology ? 'brand' : 'gray'"
+          [faIcon]="data.item.technology ? faPencil : faPlus"
+          (click)="editTechnology(data.item)"
+        ></button>
+      </td>
+    </tr>
+    <tr>
+      <th id="inserter-header">{{ 'data.inserter' | translate }}</th>
+      <td>
+        <button
+          type="button"
+          labButton
+          [attr.aria-label]="'data.inserter' | translate"
+          [color]="data.item.inserter ? 'brand' : 'gray'"
+          [faIcon]="data.item.inserter ? faPencil : faPlus"
+          (click)="editInserter(data.item)"
+        ></button>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="gap-1 sm:gap-2 flex justify-end">
+  <button
+    type="button"
+    labButton
+    color="brand"
+    [faIcon]="faFloppyDisk"
+    [text]="'save' | translate"
+    (click)="dialogRef.close(data.item)"
+  ></button>
+  <button
+    type="button"
+    labButton
+    [faIcon]="faXmark"
+    [text]="'cancel' | translate"
+    (click)="dialogRef.close()"
+  ></button>
+</div>

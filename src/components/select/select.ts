@@ -1,0 +1,327 @@
+import { CdkOverlayOrigin, OverlayModule } from '@angular/cdk/overlay';
+import {
+  afterNextRender,
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  ElementRef,
+  inject,
+  Injector,
+  input,
+  linkedSignal,
+  model,
+  signal,
+  viewChild,
+  viewChildren,
+} from '@angular/core';
+import { FormsModule, NG_VALUE_ACCESSOR } from '@angular/forms';
+import { FaIconComponent } from '@fortawesome/angular-fontawesome';
+import {
+  faChevronDown,
+  faMagnifyingGlass,
+} from '@fortawesome/free-solid-svg-icons';
+import { cva } from 'class-variance-authority';
+
+import { Option } from '~/option/option';
+import { Translate } from '~/translate/translate';
+import { TranslatePipe } from '~/translate/translate-pipe';
+import { areSetsEqual } from '~/utils/equality';
+import { SKIP_FOCUS_KEYS } from '~/utils/keyboard';
+
+import { Checkbox } from '../checkbox/checkbox';
+import { Control } from '../control';
+import { FormField } from '../form-field/form-field';
+import { Icon } from '../icon/icon';
+import { Ripple } from '../ripple/ripple';
+import { Rounded, roundedVariants } from '../rounding';
+import { Tooltip } from '../tooltip/tooltip';
+
+let nextUniqueId = 0;
+const TOGGLE_KEYS = new Set(['Enter', 'ArrowDown', 'ArrowUp', 'Home', 'End']);
+
+const host = cva(
+  'group min-h-9 inline-flex grow cursor-pointer items-center overflow-hidden select-none hover:z-2 hover:border-brand-400 focus:z-2 focus-visible:border-brand-400 focus-visible:outline',
+  {
+    variants: {
+      opened: {
+        true: 'z-2 border-brand-400 outline',
+        false: 'border-gray-700',
+      },
+      border: { true: 'border', false: 'hover:border' },
+      rounded: roundedVariants,
+      iconOnly: {
+        true: 'min-w-9 grow-0 justify-center outline-brand-400',
+        false: 'px-2 bg-gray-950 outline-brand-400',
+      },
+      disabled: {
+        true: 'pointer-events-none',
+      },
+    },
+    compoundVariants: [
+      {
+        border: false,
+        opened: true,
+        class: 'border',
+      },
+    ],
+  },
+);
+
+@Component({
+  selector: 'lab-select',
+  imports: [
+    FormsModule,
+    OverlayModule,
+    FaIconComponent,
+    Checkbox,
+    Icon,
+    Ripple,
+    Tooltip,
+    TranslatePipe,
+  ],
+  templateUrl: './select.html',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  host: {
+    role: 'combobox',
+    '[class]': 'hostClass()',
+    '[attr.id]': 'controlId()',
+    '[attr.tabindex]': 'disabled() ? -1 : 0',
+    '[attr.aria-disabled]': 'disabled() ? "true" : null',
+    '[attr.aria-controls]': 'opened() ? controlId() + "-listbox" : null',
+    '[attr.aria-expanded]': 'opened()',
+    '[attr.aria-labelledby]': 'labelledBy() ?? formField?.labelId ?? null',
+    '(keydown)': 'toggle($event)',
+    '(click)': 'toggle()',
+  },
+  hostDirectives: [CdkOverlayOrigin],
+  providers: [
+    {
+      provide: NG_VALUE_ACCESSOR,
+      multi: true,
+      useExisting: Select,
+    },
+    { provide: Control, useExisting: Select },
+  ],
+})
+export class Select<T = unknown> extends Control<T> {
+  protected readonly elementRef = inject<ElementRef<HTMLElement>>(ElementRef);
+  protected readonly overlayOrigin = inject(CdkOverlayOrigin);
+  protected readonly formField = inject(FormField, { optional: true });
+  private readonly injector = inject(Injector);
+  private readonly translate = inject(Translate);
+
+  protected readonly listItems =
+    viewChildren<ElementRef<HTMLLIElement>>('option');
+  protected readonly filterInput =
+    viewChild<ElementRef<HTMLInputElement>>('filterInput');
+
+  private readonly uniqueId = (nextUniqueId++).toString();
+
+  readonly controlId = input(`lab-select-${this.uniqueId}`);
+  readonly value = model<T>();
+  readonly disabled = model(false);
+  readonly labelledBy = input<string>();
+  readonly options = input.required<Option<T>[]>();
+  readonly placeholder = input<string>();
+  readonly border = input(true);
+  readonly rounded = input<Rounded>('all');
+  readonly iconOnly = input(false);
+  readonly dirty = input(false);
+
+  protected readonly filterText = signal('');
+  readonly opened = signal(false);
+
+  protected readonly selection = linkedSignal(() =>
+    this.selectionValue(this.value()),
+  );
+  protected readonly hostClass = computed(() =>
+    host({
+      opened: this.opened(),
+      border: this.border(),
+      rounded: this.rounded(),
+      iconOnly: this.iconOnly(),
+      disabled: this.disabled(),
+    }),
+  );
+  protected readonly filter = computed(() => this.options().length > 10);
+  protected readonly multi = computed(() => {
+    const value = this.value();
+    return Array.isArray(value) || value instanceof Set;
+  });
+  protected readonly selectedOption = computed(() =>
+    this.options()?.find((o) => o.value === this.value()),
+  );
+  protected readonly filterLower = computed(() =>
+    this.filterText().toLocaleLowerCase(),
+  );
+  protected readonly filteredOptions = computed(() => {
+    const options = this.options();
+    const filterLower = this.filterLower();
+    if (!filterLower) return options;
+    return options.filter((o) =>
+      this.translate.get(o.label).toLocaleLowerCase().includes(filterLower),
+    );
+  });
+  protected readonly allSelected = computed(() => {
+    const selection = this.selection();
+    const filteredOptions = this.filteredOptions();
+    const filteredSelection = filteredOptions.filter((o) =>
+      selection.has(o.value),
+    );
+    if (filteredSelection.length === 0) return false;
+    if (filteredSelection.length === filteredOptions.length) return true;
+    return undefined;
+  });
+
+  protected readonly faChevronDown = faChevronDown;
+  protected readonly faMagnifyingGlass = faMagnifyingGlass;
+
+  toggle(event?: Event): void {
+    if (
+      this.disabled() ||
+      (event instanceof KeyboardEvent && !TOGGLE_KEYS.has(event.key))
+    )
+      return;
+
+    if (this.opened()) {
+      this.opened.set(false);
+      const value = this.value();
+      const selection = this.selection();
+      if (
+        (Array.isArray(value) || value instanceof Set) &&
+        !areSetsEqual(value, selection)
+      ) {
+        const newValue = Array.isArray(value)
+          ? Array.from(selection)
+          : selection;
+        this.setValue(newValue as unknown as T);
+      }
+    } else {
+      this.opened.set(true);
+      this.filterText.set('');
+      this.selection.set(this.selectionValue(this.value()));
+      this.focusAfterOpen(event);
+    }
+
+    event?.preventDefault();
+  }
+
+  select(value: T): void {
+    if (this.multi()) {
+      this.selection.update((s) => {
+        const result = new Set(s);
+        if (result.has(value)) result.delete(value);
+        else result.add(value);
+        return result;
+      });
+    } else {
+      this.toggle();
+      this.setValue(value);
+    }
+  }
+
+  selectAll(value: boolean | undefined): void {
+    if (!this.multi() || value == null) return;
+    this.selection.update((set) => {
+      set = new Set(set);
+      this.filteredOptions().forEach((o) => {
+        if (value) set.add(o.value);
+        else set.delete(o.value);
+      });
+      return set;
+    });
+  }
+
+  keydown(opt: Option<T>, el: HTMLLIElement, event: KeyboardEvent): void {
+    switch (event.key) {
+      case 'Enter': {
+        this.select(opt.value);
+        break;
+      }
+      case 'ArrowUp': {
+        this.focusMove(el, -1, event);
+        break;
+      }
+      case 'ArrowDown': {
+        this.focusMove(el, 1, event);
+        break;
+      }
+      case 'Home': {
+        this.focusFirst(event);
+        break;
+      }
+      case 'End': {
+        this.focusLast(event);
+        break;
+      }
+      default: {
+        if (SKIP_FOCUS_KEYS.has(event.key)) return;
+        this.filterInput()?.nativeElement.focus();
+        break;
+      }
+    }
+  }
+
+  private focusFirst(event: Event): void {
+    const el = this.listItems()[0]?.nativeElement;
+    if (el == null) return;
+    el.focus();
+    event.preventDefault();
+  }
+
+  private focusLast(event: Event): void {
+    const items = this.listItems();
+    const el = items[items.length - 1]?.nativeElement;
+    if (el == null) return;
+    el.focus();
+    event.preventDefault();
+  }
+
+  private focusMove(option: HTMLLIElement, dir: -1 | 1, event: Event): void {
+    const index = this.listItems().findIndex((i) => i.nativeElement === option);
+    const el = this.listItems()[index + dir]?.nativeElement;
+    if (el == null) return;
+    el.focus();
+    event.preventDefault();
+  }
+
+  private selectionValue(value: T | undefined): Set<unknown> {
+    if (Array.isArray(value)) return new Set(value);
+    if (value instanceof Set) return value;
+    return new Set();
+  }
+
+  private focusAfterOpen(event?: Event): void {
+    // Determine which element to focus, most likely the selected element
+    // Don't need to worry about filter, none can be applied yet
+    const options = this.options();
+    let index = options.findIndex((o) => o.value === this.value());
+    if (this.multi() || index === -1) index = 0;
+    if (event instanceof KeyboardEvent) {
+      switch (event.key) {
+        case 'ArrowUp':
+          if (index > 0) index--;
+          break;
+        case 'ArrowDown':
+          if (index !== -1 && index < options.length - 1) index++;
+          break;
+        case 'Home':
+          index = 0;
+          break;
+        case 'End':
+          index = options.length - 1;
+          break;
+      }
+    }
+
+    afterNextRender(
+      () => {
+        const el = this.listItems().at(index)?.nativeElement;
+        if (el == null) return;
+        el.scrollIntoView();
+        el.focus();
+      },
+      { injector: this.injector },
+    );
+  }
+}

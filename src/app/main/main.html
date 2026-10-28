@@ -1,0 +1,72 @@
+<aside #settings="labSettings" labSettings></aside>
+<div
+  role="none"
+  class="xl:hidden fixed z-5 hidden h-dvh w-dvw bg-ground-950/75"
+  [class.hidden]="!settings.open()"
+  (click)="settings.open.set(false)"
+></div>
+<aside #preferences="labPreferences" labPreferences></aside>
+<div
+  role="none"
+  class="xl:hidden fixed z-5 hidden h-dvh w-dvw bg-ground-950/75"
+  [class.hidden]="!preferences.open()"
+  (click)="preferences.open.set(false)"
+></div>
+<div
+  class="flex h-full flex-col transition-[margin]"
+  [class.xl:ms-80]="!settings.xlHidden()"
+  [class.xl:me-80]="preferences.open()"
+>
+  <header
+    labHeader
+    [(preferencesOpen)]="preferences.open"
+    [(settingsOpen)]="settings.open"
+    [(settingsXlHidden)]="settings.xlHidden"
+  ></header>
+  <main class="flex grow flex-col">
+    <lab-objectives></lab-objectives>
+
+    <div class="px-1 sm:px-3 lg:px-6 lg:pt-3 flex grow flex-col">
+      <h2 class="mb-1 text-2xl font-light xl:block hidden">
+        {{ 'app.factory' | translate }}
+      </h2>
+      <div class="mb-1 sm:mb-2 relative">
+        <lab-tabs [tabs]="tabs"></lab-tabs>
+      </div>
+      <div class="pb-1 grow overflow-x-auto">
+        <router-outlet #ro="outlet"></router-outlet>
+        @if (!ro.isActivated) {
+          <div class="flex h-full items-center justify-center">
+            <img
+              src="factoriolab-animate.webp"
+              alt="FactorioLab"
+              height="174"
+              width="194"
+              fetchpriority="high"
+            />
+          </div>
+        }
+      </div>
+    </div>
+
+    <div
+      class="p-1 sm:p-3 lg:p-6 flex justify-between border-t border-gray-600"
+    >
+      <span>
+        @if (result().resultType === 'solved') {
+          {{
+            'app.simplexSolved'
+              | translate
+                : {
+                    time: result().time,
+                    cost: result().cost?.toLocaleString(),
+                  }
+          }}
+        } @else {
+          {{ 'options.simplexResultType.' + result().resultType | translate }}
+        }
+      </span>
+      <span>{{ release.version() }}</span>
+    </div>
+  </main>
+</div>

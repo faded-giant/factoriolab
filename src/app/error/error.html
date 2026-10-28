@@ -1,0 +1,23 @@
+<div class="gap-2 text-lg font-semibold flex items-center text-complement-300">
+  <fa-icon [icon]="faExclamationCircle"></fa-icon>
+  {{ 'error.header' | translate }}
+</div>
+<div class="text-sm font-mono text-gray-200">{{ info?.message }}</div>
+
+<div class="gap-2 flex flex-col items-center">
+  @if (settingsStore.customData.value()) {
+    <button
+      type="button"
+      labButton
+      color="brand"
+      [faIcon]="faTrash"
+      text="error.deleteCustom"
+      (click)="deleteCustom()"
+    ></button>
+  }
+
+  <a routerLink="/" class="link gap-1 flex items-center">
+    <fa-icon [icon]="faHome"></fa-icon>
+    {{ 'error.home' | translate }}
+  </a>
+</div>

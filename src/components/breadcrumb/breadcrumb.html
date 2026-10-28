@@ -1,0 +1,26 @@
+@for (crumb of crumbs(); track crumb.routerLink) {
+  @if (!$first) {
+    <fa-icon [icon]="faChevronRight"></fa-icon>
+  }
+
+  @if (crumb.routerLink) {
+    <a
+      [routerLink]="crumb.routerLink"
+      [queryParams]="resetTableParams"
+      queryParamsHandling="merge"
+      class="link gap-1 flex"
+    >
+      @if (crumb.faIcon; as icon) {
+        <fa-icon [icon]="icon"></fa-icon>
+      }
+      {{ crumb.label | translate }}
+    </a>
+  } @else {
+    <div class="gap-1 flex">
+      @if (crumb.faIcon; as icon) {
+        <fa-icon [icon]="icon"></fa-icon>
+      }
+      {{ crumb.label | translate }}
+    </div>
+  }
+}

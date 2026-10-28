@@ -1,0 +1,7 @@
+{
+  "fuelRank": ["coal"],
+  "excludedRecipes": [],
+  "minBeltRank": ["belt_mk1", "pipe"],
+  "maxBeltRank": ["belt_mk4", "pipe"],
+  "wagonRank": ["cargo_wagon", "fluid_wagon"]
+}

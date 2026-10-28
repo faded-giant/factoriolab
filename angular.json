@@ -1,0 +1,123 @@
+{
+  "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
+  "version": 1,
+  "newProjectRoot": "projects",
+  "projects": {
+    "factoriolab": {
+      "projectType": "application",
+      "schematics": {
+        "@schematics/angular:component": {
+          "changeDetection": "OnPush",
+          "style": "none"
+        }
+      },
+      "root": "",
+      "sourceRoot": "src",
+      "prefix": "lab",
+      "architect": {
+        "build": {
+          "builder": "@angular/build:application",
+          "options": {
+            "browser": "src/main.ts",
+            "tsConfig": "tsconfig.app.json",
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "public",
+                "ignore": ["**/defaults.json"]
+              },
+              {
+                "glob": "glpk.all.wasm",
+                "input": "node_modules/glpk-wasm/dist/"
+              }
+            ],
+            "styles": ["src/styles.css"],
+            "allowedCommonJsDependencies": [
+              "@sideway/formula",
+              "elkjs",
+              "file-saver",
+              "glpk-ts",
+              "localforage"
+            ]
+          },
+          "configurations": {
+            "production": {
+              "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "950kB",
+                  "maximumError": "1.25MB"
+                },
+                {
+                  "type": "anyComponentStyle",
+                  "maximumWarning": "4kB",
+                  "maximumError": "8kB"
+                }
+              ],
+              "outputHashing": "all",
+              "serviceWorker": "ngsw-config.json"
+            },
+            "development": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true
+            },
+            "staging": {
+              "baseHref": "/staging/"
+            },
+            "next": {
+              "baseHref": "/next/"
+            }
+          },
+          "defaultConfiguration": "production"
+        },
+        "serve": {
+          "builder": "@angular/build:dev-server",
+          "configurations": {
+            "production": {
+              "buildTarget": "factoriolab:build:production"
+            },
+            "development": {
+              "buildTarget": "factoriolab:build:development"
+            }
+          },
+          "defaultConfiguration": "development"
+        },
+        "extract-i18n": {
+          "builder": "@angular/build:extract-i18n"
+        },
+        "test": {
+          "builder": "@angular/build:karma",
+          "options": {
+            "tsConfig": "tsconfig.spec.json",
+            "karmaConfig": "karma.conf.js",
+            "codeCoverage": true,
+            "codeCoverageExclude": ["src/tests/**/*"],
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "public",
+                "ignore": ["**/defaults.json"]
+              },
+              {
+                "glob": "glpk.all.wasm",
+                "input": "node_modules/glpk-wasm/dist/"
+              }
+            ],
+            "styles": ["src/styles.css"]
+          }
+        },
+        "lint": {
+          "builder": "@angular-eslint/builder:lint",
+          "options": {
+            "lintFilePatterns": ["src/**/*.ts", "src/**/*.html"]
+          }
+        }
+      }
+    }
+  },
+  "cli": {
+    "analytics": "d77293c4-7d34-44a7-879c-a57e1cd6821e",
+    "schematicCollections": ["angular-eslint"]
+  }
+}
