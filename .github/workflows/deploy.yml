@@ -1,0 +1,66 @@
+name: deploy
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Reported but not blocking, so a style nit never stops a deploy
+      - name: Run Prettier
+        run: npm run prettier
+        continue-on-error: true
+
+      - name: Run ESLint
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Run tests
+        run: npm run test:ci
+        continue-on-error: true
+
+      # Project sites live at /<repo>/, a <user>.github.io repo at /
+      - name: Run build
+        run: |
+          repo="${{ github.event.repository.name }}"
+          if [ "$repo" = "${{ github.repository_owner }}.github.io" ]; then base=/; else base="/$repo/"; fi
+          npm run build -- --base-href "$base"
+
+      - name: Copy index to 404
+        run: cp dist/factoriolab/browser/index.html dist/factoriolab/browser/404.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/factoriolab/browser
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -27,6 +27,69 @@
 </div>
 
 <div class="gap-2 p-4 flex flex-col">
+  <div class="gap-1 flex flex-col">
+    <span class="mx-1 text-sm text-gray-300">{{ 'sync.header' | translate }}</span>
+    @if (syncStore.config(); as config) {
+      <span class="mx-1 text-sm">
+        {{ config.owner }}/{{ config.repo }} · {{ syncStatusText() }}
+      </span>
+      @if (syncStore.error(); as error) {
+        <span class="mx-1 text-sm text-complement-400">{{ error }}</span>
+      }
+      <div class="flex">
+        <button
+          type="button"
+          labButton
+          rounded="start"
+          class="grow"
+          [faIcon]="faRotate"
+          text="sync.syncNow"
+          [disabled]="syncStore.status() === 'syncing'"
+          (click)="syncStore.sync()"
+        ></button>
+        <button
+          type="button"
+          labButton
+          rounded="end"
+          class="-ms-px"
+          [faIcon]="faRightFromBracket"
+          labTooltip="sync.disconnect"
+          [attr.aria-label]="'sync.disconnect' | translate"
+          (click)="disconnectSync()"
+        ></button>
+      </div>
+    } @else {
+      <input
+        type="text"
+        class="input"
+        [placeholder]="'sync.repoPlaceholder' | translate"
+        autocomplete="off"
+        [(ngModel)]="syncRepo"
+      />
+      <input
+        type="password"
+        class="input"
+        [placeholder]="'sync.tokenPlaceholder' | translate"
+        autocomplete="off"
+        [(ngModel)]="syncToken"
+        (keydown.enter)="connectSync()"
+      />
+      @if (syncStore.error(); as error) {
+        <span class="mx-1 text-sm text-complement-400">{{ error }}</span>
+      }
+      <button
+        type="button"
+        labButton
+        color="brand"
+        class="w-full"
+        [faIcon]="faCloud"
+        text="sync.connect"
+        [disabled]="syncStore.status() === 'syncing'"
+        (click)="connectSync()"
+      ></button>
+    }
+  </div>
+
   <div class="flex flex-col">
     <span class="mx-1 text-sm text-gray-300">{{
       'preferences.savedStates' | translate

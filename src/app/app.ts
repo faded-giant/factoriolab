@@ -11,6 +11,7 @@ import { CustomDataDialog } from '~/components/custom-data-dialog/custom-data-di
 import { CUSTOM_MOD } from '~/data/game';
 import { Release } from '~/data/release';
 import { SettingsStore } from '~/state/settings/settings-store';
+import { SyncStore } from '~/sync/sync-store';
 import { log } from '~/utils/log';
 import { WindowClient } from '~/utils/window-client';
 
@@ -28,6 +29,8 @@ export class App {
   private readonly confirm = inject(Confirm);
   private readonly windowClient = inject(WindowClient);
   protected readonly settingsStore = inject(SettingsStore);
+  // Injected here so sync starts with the app, not when its panel opens
+  protected readonly syncStore = inject(SyncStore);
 
   // Stored on component to enable spyOn in tests
   private readonly log = log;

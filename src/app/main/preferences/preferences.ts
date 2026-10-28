@@ -16,6 +16,7 @@ import {
   faArrowRotateLeft,
   faArrowUpRightFromSquare,
   faCircleInfo,
+  faCloud,
   faCopy,
   faDiagramProject,
   faEllipsisVertical,
@@ -23,6 +24,8 @@ import {
   faFloppyDisk,
   faPencil,
   faPlus,
+  faRightFromBracket,
+  faRotate,
   faRotateLeft,
   faTableColumns,
   faTrash,
@@ -49,6 +52,7 @@ import { PreferencesStore } from '~/state/preferences/preferences-store';
 import { themeOptions } from '~/state/preferences/theme';
 import { RouterSync } from '~/state/router/router-sync';
 import { SettingsStore } from '~/state/settings/settings-store';
+import { SyncStore } from '~/sync/sync-store';
 import { languageOptions } from '~/translate/language';
 import { TranslatePipe } from '~/translate/translate-pipe';
 import { WindowClient } from '~/utils/window-client';
@@ -93,6 +97,7 @@ export class Preferences {
   protected readonly preferencesStore = inject(PreferencesStore);
   protected readonly routerSync = inject(RouterSync);
   protected readonly settingsStore = inject(SettingsStore);
+  protected readonly syncStore = inject(SyncStore);
   private readonly windowClient = inject(WindowClient);
 
   readonly open = signal(false);
@@ -116,6 +121,15 @@ export class Preferences {
   );
   readonly editStatus = signal<'create' | 'edit' | null>(null);
   readonly editValue = signal('');
+  readonly syncRepo = signal('');
+  readonly syncToken = signal('');
+  readonly syncStatusText = computed(() => {
+    const status = this.syncStore.status();
+    if (status === 'syncing') return 'syncing…';
+    if (status === 'error') return 'sync failed';
+    const last = this.syncStore.lastSynced();
+    return last ? `synced ${last.toLocaleTimeString()}` : 'connected';
+  });
 
   protected readonly apply = this.preferencesStore.apply.bind(
     this.preferencesStore,
@@ -124,12 +138,15 @@ export class Preferences {
   protected readonly faArrowRotateLeft = faArrowRotateLeft;
   protected readonly faArrowUpRightFromSquare = faArrowUpRightFromSquare;
   protected readonly faCircleInfo = faCircleInfo;
+  protected readonly faCloud = faCloud;
   protected readonly faCopy = faCopy;
   protected readonly faDiagramProject = faDiagramProject;
   protected readonly faEllipsisVertical = faEllipsisVertical;
   protected readonly faFloppyDisk = faFloppyDisk;
   protected readonly faPencil = faPencil;
   protected readonly faPlus = faPlus;
+  protected readonly faRightFromBracket = faRightFromBracket;
+  protected readonly faRotate = faRotate;
   protected readonly faTableColumns = faTableColumns;
   protected readonly faTrash = faTrash;
   protected readonly faXmark = faXmark;
@@ -167,6 +184,38 @@ export class Preferences {
               this.windowClient.reload.bind(this.windowClient),
             );
         }
+      });
+  }
+
+  async connectSync(): Promise<void> {
+    const [owner, repo] = this.syncRepo().trim().split('/');
+    const token = this.syncToken().trim();
+    if (!owner || !repo || !token) {
+      this.syncStore.error.set('Enter owner/repo and a token');
+      return;
+    }
+
+    try {
+      await this.syncStore.connect({ owner, repo, token });
+      this.syncToken.set('');
+    } catch {
+      // Error is shown by the sync store
+    }
+  }
+
+  disconnectSync(): void {
+    this.confirm
+      .open({
+        header: 'sync.disconnect',
+        message: 'sync.disconnectMessage',
+        icon: faExclamationTriangle,
+        actions: [
+          { text: 'yes', value: true, icon: faRightFromBracket },
+          { text: 'cancel', value: false, icon: faXmark },
+        ],
+      })
+      .subscribe((res) => {
+        if (res) this.syncStore.disconnect();
       });
   }
 

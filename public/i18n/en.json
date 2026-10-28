@@ -584,6 +584,15 @@
     "wagonTooltip": "Click to select wagon",
     "wagonsUndoTooltip": "Undo all wagon modifications"
   },
+  "sync": {
+    "connect": "Connect to GitHub",
+    "disconnect": "Disconnect sync",
+    "disconnectMessage": "Stop syncing on this machine? Saved states stay in this browser and in the GitHub repo.",
+    "header": "Sync (GitHub)",
+    "repoPlaceholder": "owner/repo",
+    "syncNow": "Sync now",
+    "tokenPlaceholder": "Fine-grained token"
+  },
   "technologies": {
     "available": "Available",
     "exportCopyScript": "Copy console script",

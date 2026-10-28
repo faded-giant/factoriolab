@@ -47,6 +47,16 @@ export class PreferencesStore extends Store<PreferencesState> {
       storeValue('preferences', JSON.stringify(this.state()));
     });
 
+    // Pick up changes from other tabs, so a stale tab cannot overwrite them
+    window.addEventListener('storage', (event) => {
+      if (event.key !== 'preferences' || !event.newValue) return;
+      try {
+        this.load(JSON.parse(event.newValue) as PreferencesState);
+      } catch {
+        // Ignore unreadable values
+      }
+    });
+
     effect(() => {
       const theme = this.theme();
       if (
