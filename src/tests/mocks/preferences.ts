@@ -13,6 +13,7 @@ export const mockPreferencesState: PreferencesState = {
     [mockModId]: { ['name']: 'z=zip' },
   },
   buildMeta: {},
+  bases: {},
   columns: initialColumnsState,
   powerUnit: PowerUnit.Auto,
   language: 'en',

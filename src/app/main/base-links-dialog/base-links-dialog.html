@@ -1,0 +1,36 @@
+<p class="text-sm text-gray-300">{{ 'base.linksHelp' | translate }}</p>
+
+<div class="gap-1 flex flex-col">
+  <span class="mx-1 text-sm text-gray-300">{{
+    'base.imports' | translate
+  }}</span>
+  @for (row of imports(); track row.itemId) {
+    <div class="gap-2 flex items-center">
+      <span class="grow">{{ row.name }}</span>
+      <span class="text-sm text-gray-400">{{ row.rate }}</span>
+      <lab-select
+        class="w-48"
+        [options]="sourceOptions()"
+        [value]="row.source"
+        (valueChange)="setSource(row.itemId, $event)"
+      ></lab-select>
+    </div>
+  } @empty {
+    <span class="mx-1 text-sm text-gray-400">{{
+      'base.noImports' | translate
+    }}</span>
+  }
+</div>
+
+<div class="gap-1 flex flex-col">
+  <span class="mx-1 text-sm text-gray-300">{{
+    'base.exports' | translate
+  }}</span>
+  @for (line of exports(); track line) {
+    <span class="mx-1">{{ line }}</span>
+  } @empty {
+    <span class="mx-1 text-sm text-gray-400">{{
+      'base.noExports' | translate
+    }}</span>
+  }
+</div>

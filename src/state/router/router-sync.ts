@@ -117,6 +117,10 @@ export class RouterSync {
   readonly route$ = new Subject<ActivatedRoute>();
   private readonly ready = signal(false);
   readonly stored = storedSignal('router');
+  /** Emits after a state from the URL has been loaded into the stores */
+  readonly applied = new Subject<void>();
+  /** Emits after the URL has been updated to match the stores */
+  readonly urlUpdated = new Subject<void>();
 
   private readonly modData = toObservable(this.settingsStore.modData);
   private readonly modHash = toObservable(this.settingsStore.modHash);
@@ -243,6 +247,7 @@ export class RouterSync {
     // Cache url state unless on the landing page, check via number of /
     const pathSegments = this.router.url.split('/');
     if (pathSegments.length > 2) this.stored.set(this.router.url);
+    this.urlUpdated.next();
   }
 
   zipState(state: State): ZipState {
@@ -442,6 +447,7 @@ export class RouterSync {
     this.settingsStore.load(state.settingsState);
     this.tableStore.load(state.tableState);
     this.ready.set(true);
+    this.applied.next();
   }
 
   zipModulesBeacons(

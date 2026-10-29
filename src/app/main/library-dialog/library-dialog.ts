@@ -13,11 +13,13 @@ import {
   faExclamationTriangle,
   faFloppyDisk,
   faFolder,
+  faLayerGroup,
   faPencil,
   faTrash,
   faXmark,
 } from '@fortawesome/free-solid-svg-icons';
 
+import { Base } from '~/base/base';
 import { Button } from '~/components/button/button';
 import { Confirm } from '~/components/confirm/confirm';
 import { DialogData } from '~/components/dialog/dialog';
@@ -39,6 +41,7 @@ export class LibraryDialog implements DialogData {
   protected readonly dialogRef = inject(DialogRef);
   private readonly confirm = inject(Confirm);
   protected readonly library = inject(Library);
+  protected readonly base = inject(Base);
 
   readonly header = 'library.header';
 
@@ -76,6 +79,7 @@ export class LibraryDialog implements DialogData {
   protected readonly faCheck = faCheck;
   protected readonly faFloppyDisk = faFloppyDisk;
   protected readonly faFolder = faFolder;
+  protected readonly faLayerGroup = faLayerGroup;
   protected readonly faPencil = faPencil;
   protected readonly faTrash = faTrash;
   protected readonly faXmark = faXmark;
@@ -129,6 +133,39 @@ export class LibraryDialog implements DialogData {
       })
       .subscribe((res) => {
         if (res) this.library.remove(build.name);
+      });
+  }
+
+  /** Makes a base with one tab per build in a folder, named after it */
+  async makeBase(group: LibraryFolder): Promise<void> {
+    const name = group.folder || 'Base';
+    if (!this.base.names().includes(name))
+      this.base.create(
+        name,
+        group.builds.map((b) => b.name),
+      );
+    this.dialogRef.close();
+    await this.base.open(name);
+  }
+
+  async openBase(name: string): Promise<void> {
+    this.dialogRef.close();
+    await this.base.open(name);
+  }
+
+  removeBase(name: string): void {
+    this.confirm
+      .open({
+        header: 'base.deleteHeader',
+        message: 'base.deleteMessage',
+        icon: faExclamationTriangle,
+        actions: [
+          { text: 'delete', value: true, icon: faTrash },
+          { text: 'cancel', value: false, icon: faXmark },
+        ],
+      })
+      .subscribe((res) => {
+        if (res) this.base.remove(name);
       });
   }
 

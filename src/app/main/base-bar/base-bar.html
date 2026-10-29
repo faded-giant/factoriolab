@@ -1,0 +1,149 @@
+@if (base.active(); as active) {
+  <div class="gap-1 px-1 py-1 sm:px-3 lg:px-6 flex flex-wrap items-center">
+    <span class="mx-1 text-sm text-gray-300">{{ active.name }}</span>
+    <button
+      type="button"
+      labButton
+      [color]="base.tab() === OVERVIEW ? 'brand' : 'gray'"
+      text="base.overview"
+      [disabled]="!!base.busy()"
+      (click)="base.select(OVERVIEW)"
+    ></button>
+    @for (tab of base.state()?.tabs ?? []; track tab.build) {
+      <div class="flex items-center">
+        <button
+          type="button"
+          labButton
+          [color]="base.tab() === tab.build ? 'brand' : 'gray'"
+          [text]="tab.build"
+          [disabled]="!!base.busy()"
+          (click)="base.select(tab.build)"
+        ></button>
+        @if (base.staleTabs().has(tab.build)) {
+          <span
+            class="ms-1 size-2 rounded-full bg-complement-400"
+            labTooltip="base.staleTooltip"
+          ></span>
+        }
+      </div>
+    }
+    @if (addOptions().length) {
+      @for (key of [addKey()]; track key) {
+        <lab-select
+          class="w-40"
+          placeholder="base.addTab"
+          [options]="addOptions()"
+          (valueChange)="$event && base.addTab($event)"
+        ></lab-select>
+      }
+    }
+
+    <span class="grow"></span>
+
+    @if (base.busy(); as busy) {
+      <span class="mx-1 text-sm text-gray-300">{{
+        'base.working' | translate: { name: busy }
+      }}</span>
+    }
+    <button
+      type="button"
+      labButton
+      [faIcon]="faLink"
+      text="base.links"
+      [disabled]="base.tab() === OVERVIEW || !!base.busy()"
+      (click)="dialog.open(BaseLinksDialog)"
+    ></button>
+    <button
+      type="button"
+      labButton
+      [faIcon]="faRotate"
+      text="base.updateAll"
+      [disabled]="!!base.busy()"
+      (click)="base.updateAll()"
+    ></button>
+    <button
+      type="button"
+      labButton
+      [border]="false"
+      [faIcon]="faXmark"
+      labTooltip="base.close"
+      [attr.aria-label]="'base.close' | translate"
+      [disabled]="!!base.busy()"
+      (click)="base.close()"
+    ></button>
+  </div>
+
+  @if (base.tab() === OVERVIEW) {
+    <div class="px-1 pb-3 sm:px-3 lg:px-6 overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="text-left text-gray-300">
+          <tr>
+            <th class="pe-3 py-1">{{ 'base.tab' | translate }}</th>
+            <th class="pe-3 py-1">{{ 'base.buildings' | translate }}</th>
+            <th class="pe-3 py-1">{{ 'base.power' | translate }}</th>
+            <th class="pe-3 py-1">{{ 'base.imports' | translate }}</th>
+            <th class="pe-3 py-1">{{ 'base.exports' | translate }}</th>
+            <th class="pe-3 py-1">{{ 'base.rockets' | translate }}</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of rows(); track row.build) {
+            <tr class="border-t border-gray-800 align-top">
+              <td class="pe-3 py-1">
+                {{ row.build }}
+                @if (row.missing) {
+                  <span class="text-complement-400">
+                    ({{ 'base.missing' | translate }})</span
+                  >
+                } @else if (row.stale) {
+                  <span class="text-complement-400">
+                    ({{ 'base.stale' | translate }})</span
+                  >
+                }
+              </td>
+              <td class="pe-3 py-1">{{ row.buildings ?? '–' }}</td>
+              <td class="pe-3 py-1">{{ row.power ?? '–' }}</td>
+              <td class="pe-3 py-1">
+                @for (line of row.imports; track line) {
+                  <div>{{ line }}</div>
+                } @empty {
+                  –
+                }
+              </td>
+              <td class="pe-3 py-1">
+                @for (line of row.exports; track line) {
+                  <div>{{ line }}</div>
+                } @empty {
+                  –
+                }
+              </td>
+              <td class="pe-3 py-1">{{ row.rockets ?? '–' }}</td>
+              <td class="py-1">
+                <button
+                  type="button"
+                  labButton
+                  size="small"
+                  [border]="false"
+                  [faIcon]="faXmark"
+                  labTooltip="base.removeTab"
+                  [attr.aria-label]="'base.removeTab' | translate"
+                  [disabled]="!!base.busy()"
+                  (click)="base.removeTab(row.build)"
+                ></button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+      @for (warning of warnings(); track warning) {
+        <div class="mt-1 text-sm text-complement-400">⚠ {{ warning }}</div>
+      }
+      @if (!rows().length) {
+        <div class="mt-1 text-sm text-gray-400">
+          {{ 'base.noTabs' | translate }}
+        </div>
+      }
+    </div>
+  }
+}

@@ -1,5 +1,6 @@
 import { computed, effect, inject, Service, signal } from '@angular/core';
 
+import { BaseState } from '~/state/preferences/base-state';
 import { BuildMeta } from '~/state/preferences/build-meta';
 import { PreferencesStore } from '~/state/preferences/preferences-store';
 import {
@@ -20,27 +21,66 @@ export interface BuildFile extends BuildMeta {
   query: string;
 }
 
+/** Contents of a base file in the sync repo */
+export interface BaseFile extends BaseState {
+  name: string;
+  modId: string;
+}
+
 /** Path -> file contents */
 type Files = Record<string, string>;
+
+/** Changes pulled from GitHub, applied together after a sync */
+interface RemoteChanges {
+  preferences?: string;
+  builds: BuildFile[];
+  buildRemovals: BuildFile[];
+  bases: BaseFile[];
+  baseRemovals: BaseFile[];
+}
 
 /** What each file looked like the last time this browser synced it */
 type SyncBase = Record<string, { sha: string; content: string }>;
 
 const BUILDS_DIR = 'builds/';
+const BASES_DIR = 'bases/';
 const PREFERENCES_FILE = 'preferences.json';
 const DEBOUNCE_MS = 3000;
 const FOCUS_THROTTLE_MS = 10000;
 
 /** Escapes only characters that are unsafe in file names, keeping it readable */
-export function buildPath(modId: string, name: string): string {
-  const safe = name
+function safeName(name: string): string {
+  return name
     .replace(/[%/\\:*?"<>|]/g, (c) => `%${c.charCodeAt(0).toString(16)}`)
     .replace(/^\./, '%2e');
-  return `${BUILDS_DIR}${modId}/${safe}.json`;
+}
+
+export function buildPath(modId: string, name: string): string {
+  return `${BUILDS_DIR}${modId}/${safeName(name)}.json`;
+}
+
+export function basePath(modId: string, name: string): string {
+  return `${BASES_DIR}${modId}/${safeName(name)}.json`;
 }
 
 function isManaged(path: string): boolean {
-  return path === PREFERENCES_FILE || path.startsWith(BUILDS_DIR);
+  return (
+    path === PREFERENCES_FILE ||
+    path.startsWith(BUILDS_DIR) ||
+    path.startsWith(BASES_DIR)
+  );
+}
+
+/** Copy with keys sorted, so equal records serialize identically */
+function sorted<T>(
+  record: Record<string, T> | undefined,
+): Record<string, T> | undefined {
+  if (!record || !Object.keys(record).length) return undefined;
+  return Object.fromEntries(
+    Object.keys(record)
+      .sort()
+      .map((k) => [k, record[k]]),
+  );
 }
 
 function toJson(value: unknown): string {
@@ -196,21 +236,29 @@ export class SyncStore {
       ),
     );
 
-    const upserts: BuildFile[] = [];
-    const removals: BuildFile[] = [];
-    let remotePreferences: string | undefined;
+    const remote: RemoteChanges = {
+      builds: [],
+      buildRemovals: [],
+      bases: [],
+      baseRemovals: [],
+    };
     let conflicted = false;
 
     const takeRemote = (path: string, content: string | undefined): void => {
       if (path === PREFERENCES_FILE) {
-        if (content != null) remotePreferences = content;
+        if (content != null) remote.preferences = content;
         return;
       }
 
-      if (content != null) upserts.push(JSON.parse(content) as BuildFile);
-      else {
+      const isBase = path.startsWith(BASES_DIR);
+      if (content != null) {
+        if (isBase) remote.bases.push(JSON.parse(content) as BaseFile);
+        else remote.builds.push(JSON.parse(content) as BuildFile);
+      } else {
         const previous = base[path]?.content;
-        if (previous) removals.push(JSON.parse(previous) as BuildFile);
+        if (!previous) return;
+        if (isBase) remote.baseRemovals.push(JSON.parse(previous) as BaseFile);
+        else remote.buildRemovals.push(JSON.parse(previous) as BuildFile);
       }
     };
 
@@ -247,11 +295,17 @@ export class SyncStore {
           } else delete base[path];
         } else {
           // Both changed
-          const remote = await client.getBlob(r);
-          if (l != null && remote !== l && path !== PREFERENCES_FILE) {
-            // Keep both versions of a build: remote under its name, ours as a copy
-            const ours = JSON.parse(l) as BuildFile;
-            upserts.push({ ...ours, name: `${ours.name} (conflict ${this.today()})` });
+          const theirs = await client.getBlob(r);
+          if (l != null && theirs !== l && path !== PREFERENCES_FILE) {
+            // Keep both versions: remote under its name, ours as a copy
+            const copy = `(conflict ${this.today()})`;
+            if (path.startsWith(BASES_DIR)) {
+              const ours = JSON.parse(l) as BaseFile;
+              remote.bases.push({ ...ours, name: `${ours.name} ${copy}` });
+            } else {
+              const ours = JSON.parse(l) as BuildFile;
+              remote.builds.push({ ...ours, name: `${ours.name} ${copy}` });
+            }
           }
 
           if (l != null && b != null && path === PREFERENCES_FILE) {
@@ -260,8 +314,8 @@ export class SyncStore {
             const sha = await client.putFile(path, l, r, this.message('Save', l));
             base[path] = { sha, content: l };
           } else {
-            takeRemote(path, remote);
-            base[path] = { sha: r, content: remote };
+            takeRemote(path, theirs);
+            base[path] = { sha: r, content: theirs };
           }
         }
       } catch (err) {
@@ -274,32 +328,48 @@ export class SyncStore {
     }
 
     this.writeBase(base);
-    this.applyRemote(upserts, removals, remotePreferences);
+    this.applyRemote(remote);
     return conflicted;
   }
 
   /** Applies remote changes on top of the current state, not the snapshot */
-  private applyRemote(
-    upserts: BuildFile[],
-    removals: BuildFile[],
-    preferences: string | undefined,
-  ): void {
-    if (preferences != null) {
+  private applyRemote(changes: RemoteChanges): void {
+    if (changes.preferences != null) {
       try {
         const {
           states: _states,
           buildMeta: _buildMeta,
+          bases: _bases,
           ...initial
         } = initialPreferencesState;
-        const remote = JSON.parse(preferences) as Partial<PreferencesState>;
+        const remote = JSON.parse(
+          changes.preferences,
+        ) as Partial<PreferencesState>;
         delete remote.states;
         delete remote.buildMeta;
+        delete remote.bases;
         this.preferencesStore.apply(spread(initial, remote));
       } catch {
         // Ignore an unreadable remote preferences file
       }
     }
 
+    if (changes.bases.length || changes.baseRemovals.length) {
+      const bases = { ...this.preferencesStore.bases() };
+      for (const file of changes.baseRemovals) {
+        if (!bases[file.modId]) continue;
+        bases[file.modId] = { ...bases[file.modId] };
+        delete bases[file.modId][file.name];
+      }
+      for (const file of changes.bases) {
+        const { name, modId, ...state } = file;
+        bases[modId] = { ...bases[modId], [name]: state };
+      }
+      this.preferencesStore.apply({ bases });
+    }
+
+    const upserts = changes.builds;
+    const removals = changes.buildRemovals;
     if (!upserts.length && !removals.length) return;
 
     const states = { ...this.preferencesStore.states() };
@@ -325,8 +395,33 @@ export class SyncStore {
 
   /** The files this browser's state maps to */
   private localFiles(state: PreferencesState): Files {
-    const { states, buildMeta, ...preferences } = state;
+    const { states, buildMeta, bases, ...preferences } = state;
     const files: Files = { [PREFERENCES_FILE]: toJson(preferences) };
+    for (const modId of Object.keys(bases))
+      for (const name of Object.keys(bases[modId] ?? {})) {
+        const b = bases[modId][name];
+        // Fixed key order and sorted records, so the same base always
+        // serializes the same way on every machine
+        const imports = sorted(b.imports);
+        const file: BaseFile = {
+          name,
+          modId,
+          tabs: b.tabs.map((t) => ({
+            build: t.build,
+            links: sorted(t.links),
+            applied: sorted(t.applied),
+          })),
+          imports: imports
+            ? Object.fromEntries(
+                Object.entries(imports).map(([k, v]) => [k, sorted(v) ?? {}]),
+              )
+            : undefined,
+          summaries: sorted(b.summaries),
+          updatedAt: b.updatedAt,
+        };
+        files[basePath(modId, name)] = toJson(file);
+      }
+
     for (const modId of Object.keys(states))
       for (const name of Object.keys(states[modId] ?? {})) {
         const meta = buildMeta[modId]?.[name];

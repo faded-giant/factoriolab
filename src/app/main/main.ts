@@ -12,6 +12,7 @@ import { Release } from '~/data/release';
 import { ObjectivesStore } from '~/state/objectives/objectives-store';
 import { TranslatePipe } from '~/translate/translate-pipe';
 
+import { BaseBar } from './base-bar/base-bar';
 import { Header } from './header/header';
 import { Objectives } from './objectives/objectives';
 import { Preferences } from './preferences/preferences';
@@ -21,6 +22,7 @@ import { Settings } from './settings/settings';
   selector: 'lab-main',
   imports: [
     RouterOutlet,
+    BaseBar,
     Header,
     Objectives,
     Preferences,

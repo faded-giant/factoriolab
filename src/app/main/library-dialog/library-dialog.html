@@ -46,12 +46,60 @@
 />
 
 <div class="gap-3 flex scrollbar-thin flex-col overflow-y-auto">
-  @for (group of filtered(); track group.folder) {
+  @if (base.names().length) {
     <div class="flex flex-col">
       <span class="mx-1 mb-1 gap-2 flex items-center text-sm text-gray-300">
-        <fa-icon [icon]="faFolder"></fa-icon>
-        {{ group.folder || ('library.unfiled' | translate) }}
+        <fa-icon [icon]="faLayerGroup"></fa-icon>
+        {{ 'base.bases' | translate }}
       </span>
+      @for (name of base.names(); track name) {
+        <div
+          class="gap-2 px-1 flex items-center border-b border-gray-800 hover:bg-gray-800"
+        >
+          <button
+            type="button"
+            class="py-1 min-w-0 flex grow cursor-pointer text-left"
+            (click)="openBase(name)"
+          >
+            <span
+              class="truncate"
+              [class.text-brand-400]="base.active()?.name === name"
+              >{{ name }}</span
+            >
+          </button>
+          <button
+            type="button"
+            labButton
+            [border]="false"
+            [faIcon]="faTrash"
+            labTooltip="delete"
+            [attr.aria-label]="'delete' | translate"
+            (click)="removeBase(name)"
+          ></button>
+        </div>
+      }
+    </div>
+  }
+  @for (group of filtered(); track group.folder) {
+    <div class="flex flex-col">
+      <div class="mx-1 mb-1 gap-2 flex items-center text-sm text-gray-300">
+        <fa-icon [icon]="faFolder"></fa-icon>
+        <span class="grow">{{
+          group.folder || ('library.unfiled' | translate)
+        }}</span>
+        @if (group.folder && group.builds.length > 1) {
+          <button
+            type="button"
+            labButton
+            size="small"
+            [border]="false"
+            [faIcon]="faLayerGroup"
+            text="base.makeBase"
+            labTooltip="base.makeBaseTooltip"
+            (click)="makeBase(group)"
+          ></button>
+        }
+      </div>
       @for (build of group.builds; track build.name) {
         @if (editing() === build.name) {
           <div class="gap-1 p-2 flex flex-col border border-gray-600">

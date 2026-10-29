@@ -1,5 +1,6 @@
 import { DOCUMENT, effect, inject, Service } from '@angular/core';
 
+import { renameBuild } from '~/base/base-logic';
 import { Store } from '~/state/store';
 import { applyBackgroundLightness, applyHue } from '~/utils/color';
 import { log } from '~/utils/log';
@@ -7,6 +8,7 @@ import { spread } from '~/utils/object';
 import { storedSignal, storeValue } from '~/utils/stored-signal';
 
 import { StepDetailSection } from '../objectives/step-detail-section';
+import { BaseState } from './base-state';
 import { BuildMeta } from './build-meta';
 import { initialPreferencesState, PreferencesState } from './preferences-state';
 
@@ -26,6 +28,7 @@ export class PreferencesStore extends Store<PreferencesState> {
   readonly showTechLabels = this.select('showTechLabels');
   readonly states = this.select('states');
   readonly buildMeta = this.select('buildMeta');
+  readonly bases = this.select('bases');
   readonly theme = this.select('theme');
   readonly hue = this.select('hue');
   readonly chroma = this.select('chroma');
@@ -34,7 +37,12 @@ export class PreferencesStore extends Store<PreferencesState> {
   readonly glpkAlgorithm = this.select('glpkAlgorithm');
 
   constructor() {
-    super(initialPreferencesState, ['states', 'buildMeta', 'flowSettings']);
+    super(initialPreferencesState, [
+      'states',
+      'buildMeta',
+      'bases',
+      'flowSettings',
+    ]);
     const stored = this.stored();
     if (stored) {
       try {
@@ -125,7 +133,26 @@ export class PreferencesStore extends Store<PreferencesState> {
       const meta = state.buildMeta[modId]?.[from];
       if (meta) gameMeta[to] = meta;
       const buildMeta = spread(state.buildMeta, { [modId]: gameMeta });
-      return { states, buildMeta };
+      // Keep bases pointing at the renamed build
+      const gameBases = { ...state.bases[modId] };
+      for (const name of Object.keys(gameBases))
+        gameBases[name] = renameBuild(gameBases[name], from, to);
+      const bases = spread(state.bases, { [modId]: gameBases });
+      return { states, buildMeta, bases };
+    });
+  }
+
+  saveBase(modId: string, name: string, base: BaseState): void {
+    this.update((state) => {
+      const gameBases = spread(state.bases[modId], { [name]: base });
+      return { bases: spread(state.bases, { [modId]: gameBases }) };
+    });
+  }
+
+  removeBase(modId: string, name: string): void {
+    this.update((state) => {
+      const gameBases = this._removeEntry(state.bases[modId] ?? {}, name);
+      return { bases: spread(state.bases, { [modId]: gameBases }) };
     });
   }
 

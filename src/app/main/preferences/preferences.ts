@@ -172,7 +172,7 @@ export class Preferences {
       .subscribe((res) => {
         if (res === 1) {
           // Do not reset saved states or their library details
-          const { states, buildMeta, ...state } =
+          const { states, buildMeta, bases, ...state } =
             initialPreferencesState as Partial<PreferencesState>;
           this.preferencesStore.apply(state);
         } else if (res === 2) {
