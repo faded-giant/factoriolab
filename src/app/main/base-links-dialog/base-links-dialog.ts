@@ -39,7 +39,7 @@ export class BaseLinksDialog implements DialogData {
 
   /** From the live solve, so newly excluded items show up right away */
   readonly imports = computed((): ImportRow[] => {
-    const tab = this.base.state()?.tabs.find((t) => t.build === this.base.tab());
+    const tab = this.base.state()?.tabs.find((t) => t.id === this.base.tab());
     if (!tab) return [];
     const imports = importsFrom(
       this.objectivesStore.steps(),
@@ -66,12 +66,9 @@ export class BaseLinksDialog implements DialogData {
     );
   });
 
-  readonly sourceOptions = computed((): Option[] => [
-    { label: 'base.notLinked', value: '' },
-    ...(this.base.state()?.tabs ?? [])
-      .filter((t) => t.build !== this.base.tab())
-      .map((t) => ({ label: t.build, value: t.build })),
-  ]);
+  readonly sourceOptions = computed((): Option[] =>
+    this.base.sourceOptions(this.base.tab()),
+  );
 
   setSource(itemId: string, source: string | undefined): void {
     this.base.setLink(this.base.tab(), itemId, source || null);

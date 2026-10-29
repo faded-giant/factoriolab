@@ -9,17 +9,19 @@
       [disabled]="!!base.busy()"
       (click)="base.select(OVERVIEW)"
     ></button>
-    @for (tab of base.state()?.tabs ?? []; track tab.build) {
-      <div class="flex items-center">
+    @for (tab of base.state()?.tabs ?? []; track tab.id) {
+      <div class="flex items-center" [class.opacity-60]="!tab.build">
         <button
           type="button"
           labButton
-          [color]="base.tab() === tab.build ? 'brand' : 'gray'"
-          [text]="tab.build"
+          [color]="base.tab() === tab.id ? 'brand' : 'gray'"
+          [text]="tabLabel(tab)"
+          [iconType]="tab.location ? 'location' : undefined"
+          [icon]="tab.location"
           [disabled]="!!base.busy()"
-          (click)="base.select(tab.build)"
+          (click)="base.select(tab.id)"
         ></button>
-        @if (base.staleTabs().has(tab.build)) {
+        @if (base.staleTabs().has(tab.id)) {
           <span
             class="ms-1 size-2 rounded-full bg-complement-400"
             labTooltip="base.staleTooltip"
@@ -27,22 +29,39 @@
         }
       </div>
     }
+    @if (base.hasPlatforms()) {
+      <button
+        type="button"
+        labButton
+        [faIcon]="faPlus"
+        iconType="location"
+        icon="space-platform"
+        text="base.addPlatform"
+        [disabled]="!!base.busy()"
+        (click)="base.addPlatform()"
+      ></button>
+    }
     @if (addOptions().length) {
       @for (key of [addKey()]; track key) {
         <lab-select
           class="w-40"
           placeholder="base.addTab"
           [options]="addOptions()"
-          (valueChange)="$event && base.addTab($event)"
+          (valueChange)="$event && base.addBuild($event)"
         ></lab-select>
       }
     }
 
     <span class="grow"></span>
 
-    @if (base.busy(); as busy) {
+    @if (base.busy() ?? base.working(); as name) {
       <span class="mx-1 text-sm text-gray-300">{{
-        'base.working' | translate: { name: busy }
+        'base.working' | translate: { name: name }
+      }}</span>
+    }
+    @if (base.error(); as error) {
+      <span class="mx-1 text-sm text-complement-400" [title]="error">{{
+        'base.error' | translate
       }}</span>
     }
     <button
@@ -52,14 +71,6 @@
       text="base.links"
       [disabled]="base.tab() === OVERVIEW || !!base.busy()"
       (click)="dialog.open(BaseLinksDialog)"
-    ></button>
-    <button
-      type="button"
-      labButton
-      [faIcon]="faRotate"
-      text="base.updateAll"
-      [disabled]="!!base.busy()"
-      (click)="base.updateAll()"
     ></button>
     <button
       type="button"
@@ -88,19 +99,28 @@
           </tr>
         </thead>
         <tbody>
-          @for (row of rows(); track row.build) {
+          @for (row of rows(); track row.id) {
             <tr class="border-t border-gray-800 align-top">
               <td class="pe-3 py-1">
-                {{ row.build }}
-                @if (row.missing) {
-                  <span class="text-complement-400">
-                    ({{ 'base.missing' | translate }})</span
-                  >
-                } @else if (row.stale) {
-                  <span class="text-complement-400">
-                    ({{ 'base.stale' | translate }})</span
-                  >
-                }
+                <div class="gap-1 flex items-center">
+                  @if (row.location) {
+                    <lab-icon [value]="row.location" type="location"></lab-icon>
+                  }
+                  {{ row.label }}
+                  @if (row.missing) {
+                    <span class="text-complement-400"
+                      >({{ 'base.missing' | translate }})</span
+                    >
+                  } @else if (row.unused) {
+                    <span class="text-gray-400"
+                      >({{ 'base.unused' | translate }})</span
+                    >
+                  } @else if (row.stale) {
+                    <span class="text-complement-400"
+                      >({{ 'base.stale' | translate }})</span
+                    >
+                  }
+                </div>
               </td>
               <td class="pe-3 py-1">{{ row.buildings ?? '–' }}</td>
               <td class="pe-3 py-1">{{ row.power ?? '–' }}</td>
@@ -135,7 +155,7 @@
                   labTooltip="base.removeTab"
                   [attr.aria-label]="'base.removeTab' | translate"
                   [disabled]="!!base.busy()"
-                  (click)="base.removeTab(row.build)"
+                  (click)="base.removeTab(row.id)"
                 ></button>
               </td>
             </tr>

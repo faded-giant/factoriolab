@@ -138,21 +138,30 @@ export class LibraryDialog implements DialogData {
       });
   }
 
+  readonly newBaseName = signal('');
+
+  /** Makes a base with one tab per planet */
+  newBase(): void {
+    const name = this.newBaseName().trim();
+    if (!name) return;
+    if (!this.base.names().includes(name)) this.base.create(name);
+    this.openBase(name);
+  }
+
   /** Makes a base with one tab per build in a folder, named after it */
-  async makeBase(group: LibraryFolder): Promise<void> {
+  makeBase(group: LibraryFolder): void {
     const name = group.folder || 'Base';
     if (!this.base.names().includes(name))
       this.base.create(
         name,
         group.builds.map((b) => b.name),
       );
-    this.dialogRef.close();
-    await this.base.open(name);
+    this.openBase(name);
   }
 
-  async openBase(name: string): Promise<void> {
+  openBase(name: string): void {
     this.dialogRef.close();
-    await this.base.open(name);
+    this.base.open(name);
   }
 
   removeBase(name: string): void {

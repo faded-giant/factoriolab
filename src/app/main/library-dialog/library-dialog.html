@@ -46,12 +46,34 @@
 />
 
 <div class="gap-3 flex scrollbar-thin flex-col overflow-y-auto">
-  @if (base.names().length) {
+  @if (base.names().length || base.planets().length) {
     <div class="flex flex-col">
       <span class="mx-1 mb-1 gap-2 flex items-center text-sm text-gray-300">
         <fa-icon [icon]="faLayerGroup"></fa-icon>
         {{ 'base.bases' | translate }}
       </span>
+      @if (base.planets().length) {
+        <div class="mb-1 flex">
+          <input
+            type="text"
+            class="input grow"
+            [placeholder]="'base.newBaseName' | translate"
+            [(ngModel)]="newBaseName"
+            (keydown.enter)="newBase()"
+          />
+          <button
+            type="button"
+            labButton
+            rounded="end"
+            class="-ms-px"
+            color="brand"
+            [faIcon]="faLayerGroup"
+            text="base.newBase"
+            [disabled]="!newBaseName().trim()"
+            (click)="newBase()"
+          ></button>
+        </div>
+      }
       @for (name of base.names(); track name) {
         <div
           class="gap-2 px-1 flex items-center border-b border-gray-800 hover:bg-gray-800"
@@ -87,7 +109,7 @@
         <span class="grow">{{
           group.folder || ('library.unfiled' | translate)
         }}</span>
-        @if (group.folder && group.builds.length > 1) {
+        @if (!base.planets().length && group.folder && group.builds.length > 1) {
           <button
             type="button"
             labButton

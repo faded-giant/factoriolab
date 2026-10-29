@@ -1,17 +1,12 @@
 import {
   computed,
   effect,
+  EnvironmentInjector,
   inject,
   Service,
   signal,
   untracked,
 } from '@angular/core';
-import {
-  faExclamationTriangle,
-  faFloppyDisk,
-  faTrash,
-  faXmark,
-} from '@fortawesome/free-solid-svg-icons';
 import {
   debounceTime,
   firstValueFrom,
@@ -21,14 +16,14 @@ import {
   timer,
 } from 'rxjs';
 
-import { Confirm } from '~/components/confirm/confirm';
 import { Library } from '~/library/library';
-import { rational } from '~/rational/rational';
+import { Option } from '~/option/option';
+import { rational, Rational } from '~/rational/rational';
 import { ObjectiveState } from '~/state/objectives/objective';
-import { BaseState, BaseTab } from '~/state/preferences/base-state';
 import { ObjectiveType } from '~/state/objectives/objective-type';
 import { ObjectiveUnit } from '~/state/objectives/objective-unit';
 import { ObjectivesStore } from '~/state/objectives/objectives-store';
+import { BaseState, BaseTab } from '~/state/preferences/base-state';
 import { PreferencesStore } from '~/state/preferences/preferences-store';
 import { RouterSync } from '~/state/router/router-sync';
 import { SettingsStore } from '~/state/settings/settings-store';
@@ -41,7 +36,11 @@ import {
   isStale,
   planReconcile,
   summarize,
+  tabLabel,
+  tabsToProcess,
+  withTabIds,
 } from './base-logic';
+import { Headless } from './headless';
 
 export interface ActiveBase {
   modId: string;
@@ -49,7 +48,8 @@ export interface ActiveBase {
 }
 
 export const OVERVIEW = '';
-const MAX_PASSES = 6;
+export const SPACE_PLATFORM = 'space-platform';
+const MAX_PASSES = 8;
 
 function waitFor(source: Observable<unknown>, ms: number): Promise<boolean> {
   return firstValueFrom(
@@ -57,13 +57,20 @@ function waitFor(source: Observable<unknown>, ms: number): Promise<boolean> {
   );
 }
 
+/** The calculator state a tab is solved in: the page, or the hidden copy */
+interface Solver {
+  objectivesStore: ObjectivesStore;
+  settingsStore: SettingsStore;
+}
+
 /**
- * Links several saved builds (e.g. one per planet) so that what one tab
- * imports, the tab it is linked to automatically exports.
+ * Links saved builds as tabs of a base, usually one per planet. What one tab
+ * imports, the tab it is linked to exports, kept up to date automatically by
+ * solving the other tabs in the background.
  */
 @Service()
 export class Base {
-  private readonly confirm = inject(Confirm);
+  private readonly injector = inject(EnvironmentInjector);
   private readonly library = inject(Library);
   private readonly objectivesStore = inject(ObjectivesStore);
   private readonly preferencesStore = inject(PreferencesStore);
@@ -85,19 +92,23 @@ export class Base {
   readonly state = computed((): BaseState | undefined => {
     const active = this.active();
     if (!active) return undefined;
-    return this.preferencesStore.bases()[active.modId]?.[active.name];
+    const base = this.preferencesStore.bases()[active.modId]?.[active.name];
+    return base ? withTabIds(base) : undefined;
   });
 
-  /** Build name of the open tab, or `OVERVIEW` */
+  /** Id of the open tab, or `OVERVIEW` */
   readonly tab = signal(OVERVIEW);
-  /** Progress text while switching tabs or updating, otherwise null */
+  /** Label of the tab being opened, while switching */
   readonly busy = signal<string | null>(null);
+  /** Label of the tab being updated in the background */
+  readonly working = signal<string | null>(null);
+  readonly error = signal<string | null>(null);
 
   readonly staleTabs = computed(() => {
     const state = this.state();
     if (!state) return new Set<string>();
     return new Set(
-      state.tabs.map((t) => t.build).filter((b) => isStale(state, b)),
+      state.tabs.map((t) => t.id).filter((id) => isStale(state, id)),
     );
   });
 
@@ -108,6 +119,24 @@ export class Base {
     return Object.keys(this.preferencesStore.bases()[modId] ?? {}).sort();
   });
 
+  /** Planets of the current game, empty if it has none */
+  readonly planets = computed(() => {
+    const data = this.settingsStore.dataset();
+    return data.locationIds
+      .filter((id) => id !== SPACE_PLATFORM)
+      .map((id) => ({ id, name: data.locationRecord[id]?.name ?? id }));
+  });
+
+  readonly hasPlatforms = computed(() =>
+    this.settingsStore.dataset().locationIds.includes(SPACE_PLATFORM),
+  );
+
+  private headless: Headless | undefined;
+  /** Serializes tab switches and background updates */
+  private lock: Promise<void> = Promise.resolve();
+  private running = false;
+  private again = false;
+
   constructor() {
     // A base belongs to one game; switching game closes it
     effect(() => {
@@ -117,37 +146,51 @@ export class Base {
         untracked(() => this.close());
     });
 
-    // When the open tab is saved, refresh what it needs from other tabs
+    // When the open tab's build is saved, record what it now imports
     effect(() => {
-      const tab = this.tab();
+      const id = this.tab();
       const query = this.library.query();
-      const saved = this.library.builds().find((b) => b.name === tab)?.query;
+      const build = this.state()?.tabs.find((t) => t.id === id)?.build;
+      const saved = this.library.builds().find((b) => b.name === build)?.query;
       this.objectivesStore.steps();
-      if (!tab || this.busy() || saved == null || saved !== query) return;
-      untracked(() => this.capture(tab));
+      if (!id || this.busy() || saved == null || saved !== query) return;
+      untracked(() => this.capture(id, this.live()));
+    });
+
+    // Any tab whose exports changed (or that was never solved) gets updated
+    effect(() => {
+      const state = this.state();
+      if (!state || this.busy() || !tabsToProcess(state).length) return;
+      untracked(() => this.schedule());
     });
   }
 
-  create(name: string, builds: string[]): void {
+  /** New base with one tab per planet, or from saved builds if no planets */
+  create(name: string, builds: string[] = []): void {
     const modId = this.settingsStore.modId();
     if (!modId || !name) return;
-    const tabs: BaseTab[] = builds.map((build) => ({ build }));
+    const tabs: BaseTab[] = builds.length
+      ? builds.map((build) => ({ id: build, build }))
+      : this.planets().map((p) => ({ id: p.id, label: p.name, location: p.id }));
     this.preferencesStore.saveBase(modId, name, { tabs, updatedAt: Date.now() });
   }
 
-  async open(name: string): Promise<void> {
+  open(name: string): void {
     const modId = this.settingsStore.modId();
-    if (!modId || this.busy()) return;
-    if (!(await this.leaveCurrent())) return;
+    if (!modId) return;
+    this.library.flush();
+    this.headless?.destroy();
+    this.headless = undefined;
     this.stored.set(JSON.stringify({ modId, name }));
     this.tab.set(OVERVIEW);
-    const first = this.state()?.tabs[0]?.build;
-    if (first) await this.select(first);
+    this.error.set(null);
   }
 
   close(): void {
     this.stored.set(undefined);
     this.tab.set(OVERVIEW);
+    this.headless?.destroy();
+    this.headless = undefined;
   }
 
   remove(name: string): void {
@@ -157,165 +200,225 @@ export class Base {
     this.preferencesStore.removeBase(modId, name);
   }
 
-  addTab(build: string): void {
+  addPlatform(): void {
+    this.update((s) => {
+      let n = 1;
+      while (s.tabs.some((t) => t.id === `platform-${n}`)) n++;
+      const tab: BaseTab = {
+        id: `platform-${n}`,
+        label: `Platform ${n}`,
+        location: SPACE_PLATFORM,
+      };
+      return { ...s, tabs: [...s.tabs, tab] };
+    });
+  }
+
+  /** Adds an existing saved build as a tab */
+  addBuild(build: string): void {
     this.update((s) =>
       s.tabs.some((t) => t.build === build)
         ? s
-        : { ...s, tabs: [...s.tabs, { build }] },
+        : { ...s, tabs: [...s.tabs, { id: build, build }] },
     );
   }
 
-  removeTab(build: string): void {
+  removeTab(id: string): void {
     this.update((s) => ({
       ...s,
       tabs: s.tabs
-        .filter((t) => t.build !== build)
+        .filter((t) => t.id !== id)
         .map((t) => ({
           ...t,
           links: Object.fromEntries(
-            Object.entries(t.links ?? {}).filter(([, src]) => src !== build),
+            Object.entries(t.links ?? {}).filter(([, src]) => src !== id),
           ),
         })),
     }));
-    if (this.tab() === build) this.tab.set(OVERVIEW);
+    if (this.tab() === id) this.tab.set(OVERVIEW);
   }
 
-  /** Sets which tab supplies an item imported by `build`; null unlinks it */
-  setLink(build: string, itemId: string, source: string | null): void {
-    this.update((s) => ({
-      ...s,
-      tabs: s.tabs.map((t) => {
-        if (t.build !== build) return t;
-        const links = { ...t.links };
-        if (source) links[itemId] = source;
-        else delete links[itemId];
-        return { ...t, links };
-      }),
-    }));
+  /** Choices for where tab `id` imports an item from */
+  sourceOptions(id: string): Option[] {
+    return [
+      { label: 'base.notLinked', value: '' },
+      ...(this.state()?.tabs ?? [])
+        .filter((t) => t.id !== id)
+        .map(
+          (t): Option => ({
+            label: tabLabel(t),
+            value: t.id,
+            icon: t.location,
+            iconType: t.location ? 'location' : undefined,
+          }),
+        ),
+    ];
   }
 
-  /** Opens a tab, first offering to save unsaved edits on the current one */
-  async select(build: string): Promise<boolean> {
-    if (this.busy()) return false;
-    if (!(await this.leaveCurrent())) return false;
-    if (build === OVERVIEW) {
-      this.tab.set(OVERVIEW);
-      return true;
-    }
-
-    this.busy.set(build);
-    try {
-      await this.activate(build);
-      this.tab.set(build);
-    } finally {
-      this.busy.set(null);
-    }
-    return true;
+  /** Sets which tab supplies an item imported by tab `id`; null unlinks */
+  setLink(id: string, itemId: string, source: string | null): void {
+    const links = { ...this.findTab(id)?.links };
+    if (source) links[itemId] = source;
+    else delete links[itemId];
+    this.updateTab(id, { links });
   }
 
-  /**
-   * Visits every tab, letting each one update its exports from the others,
-   * until nothing changes (tabs can supply each other in both directions)
-   */
-  async updateAll(): Promise<void> {
-    const state = this.state();
-    if (!state || this.busy()) return;
-    if (!(await this.leaveCurrent())) return;
-
-    const returnTo = this.tab();
-    try {
-      for (let pass = 1; pass <= MAX_PASSES; pass++) {
-        const before = JSON.stringify(this.state()?.imports ?? {});
-        for (const tab of this.state()?.tabs ?? []) {
-          if (!this.library.builds().some((b) => b.name === tab.build)) continue;
-          this.busy.set(`${tab.build} (pass ${pass})`);
-          await this.activate(tab.build);
-          this.tab.set(tab.build);
-        }
-        const after = JSON.stringify(this.state()?.imports ?? {});
-        if (before === after && this.staleTabs().size === 0) break;
+  /** Opens a tab, creating its build first if it is a new planet tab */
+  select(id: string): Promise<void> {
+    return this.exclusive(async () => {
+      this.library.flush();
+      if (id === OVERVIEW) {
+        this.tab.set(OVERVIEW);
+        return;
       }
-    } finally {
-      this.busy.set(null);
-    }
 
-    if (returnTo !== this.tab()) await this.select(returnTo);
+      const tab = this.findTab(id);
+      if (!tab) return;
+      this.busy.set(tabLabel(tab));
+      try {
+        const build = tab.build ?? (await this.materialize(tab));
+        await this.showLive(build);
+        this.tab.set(id);
+        const state = this.state();
+        if (state && isStale(state, id)) await this.reconcileLive(id, build);
+        this.capture(id, this.live());
+      } catch (err) {
+        this.error.set(String(err));
+      } finally {
+        this.busy.set(null);
+      }
+    });
   }
 
-  /** Returns false if the user cancelled */
-  private async leaveCurrent(): Promise<boolean> {
-    const tab = this.tab();
-    if (!tab) return true;
-    // With autosave on, just save now instead of asking
-    if (this.preferencesStore.autosave()) this.library.flush();
-    const saved = this.library.builds().find((b) => b.name === tab)?.query;
-    if (saved == null || saved === this.library.query()) return true;
-
-    const choice = await firstValueFrom(
-      this.confirm.open({
-        header: 'base.unsavedHeader',
-        message: 'base.unsavedMessage',
-        icon: faExclamationTriangle,
-        actions: [
-          { text: 'base.saveChanges', value: 'save', icon: faFloppyDisk },
-          { text: 'base.discardChanges', value: 'discard', icon: faTrash },
-          { text: 'cancel', value: 'cancel', icon: faXmark },
-        ],
-      }),
-    );
-
-    if (choice === 'save') {
-      this.library.saveCurrent(tab);
-      this.capture(tab);
-      return true;
+  /** Coalesces requests to update stale tabs into one background run */
+  private schedule(): void {
+    if (this.running) {
+      this.again = true;
+      return;
     }
-    return choice === 'discard';
+    this.running = true;
+    void this.exclusive(async () => {
+      try {
+        do {
+          this.again = false;
+          await this.processAll();
+        } while (this.again);
+        this.error.set(null);
+      } catch (err) {
+        this.error.set(String(err));
+      } finally {
+        this.working.set(null);
+        this.running = false;
+      }
+    });
   }
 
-  /** Loads a tab's build, brings its exports up to date, and saves those */
-  private async activate(build: string): Promise<void> {
-    const saved = this.library.builds().find((b) => b.name === build);
-    if (!saved) return;
+  /** Updates tabs until no exports change; tabs may supply each other */
+  private async processAll(): Promise<void> {
+    for (let pass = 0; pass < MAX_PASSES; pass++) {
+      const state = this.state();
+      if (!state) return;
+      const todo = tabsToProcess(state);
+      if (!todo.length) return;
+      for (const tab of todo) {
+        this.working.set(tabLabel(tab));
+        if (tab.id === this.tab() && tab.build)
+          await this.reconcileLive(tab.id, tab.build);
+        else await this.processHidden(tab);
+      }
+    }
+  }
 
-    // Listen before navigating, so no URL update can slip past
+  /** Brings a tab that is not on screen up to date, in the hidden copy */
+  private async processHidden(tab: BaseTab): Promise<void> {
+    const modId = this.active()?.modId;
+    if (!modId) return;
+    const build = tab.build ?? (await this.materialize(tab));
+    const saved = this.savedQuery(build);
+    if (saved == null) return;
+
+    const headless = this.engine();
+    await headless.load(modId, saved);
+
+    const settled = headless.settled();
+    if (this.reconcile(tab.id, headless)) await settled;
+    if (headless.query && headless.query !== saved)
+      this.preferencesStore.saveState(modId, build, headless.query);
+
+    this.capture(tab.id, headless);
+  }
+
+  /** Updates the exports of the tab on screen and saves the result */
+  private async reconcileLive(id: string, build: string): Promise<void> {
     const settled = this.urlSettled();
-    const navigated = saved.query !== this.library.query();
-    if (navigated) {
-      const loaded = waitFor(this.routerSync.applied, 5000);
-      await this.library.open(build);
-      await loaded;
-    }
-
-    const reconciled = this.reconcile(build);
-    if (navigated || reconciled) {
+    if (this.reconcile(id, this.live())) {
       await settled;
-      /**
-       * Nothing was edited yet, so any difference is either the export
-       * objectives or the app re-encoding an older URL: save it, so the tab
-       * does not look unsaved
-       */
-      if (this.library.query() !== saved.query) this.library.saveCurrent(build);
+      if (this.library.query() !== this.savedQuery(build))
+        this.library.saveCurrent(build);
     }
-
-    this.capture(build);
+    this.capture(id, this.live());
   }
 
-  /** Updates this tab's export objectives; returns true if any changed */
-  private reconcile(build: string): boolean {
+  /** Creates the saved build behind a new tab, limited to its location */
+  private async materialize(tab: BaseTab): Promise<string> {
+    const active = this.active();
+    if (!active) throw new Error('No base is open');
+    const name = `${active.name} – ${tabLabel(tab)}`;
+
+    if (this.savedQuery(name) == null) {
+      const headless = this.engine();
+      await headless.load(active.modId, '');
+      if (tab.location) {
+        const settled = headless.settled();
+        headless.settingsStore.apply({ locationIds: new Set([tab.location]) });
+        await settled;
+      }
+      this.preferencesStore.saveState(active.modId, name, headless.query);
+      this.preferencesStore.updateBuildMeta(active.modId, name, {
+        folder: active.name,
+      });
+    }
+
+    this.updateTab(tab.id, { build: name });
+    return name;
+  }
+
+  /** Puts a build on screen and waits until the page has caught up */
+  private async showLive(build: string): Promise<void> {
+    const saved = this.savedQuery(build);
+    if (saved == null || saved === this.library.query()) return;
+
+    const settled = this.urlSettled();
+    const loaded = waitFor(this.routerSync.applied, 5000);
+    await this.library.open(build);
+    await loaded;
+    await settled;
+    // Nothing was edited yet, so any difference is the app re-encoding an
+    // older URL: save it, so the build matches what is on screen
+    if (this.library.query() !== this.savedQuery(build))
+      this.library.saveCurrent(build);
+  }
+
+  /** Updates a tab's export objectives; returns true if any changed */
+  private reconcile(id: string, solver: Solver): boolean {
     const state = this.state();
-    const tab = state?.tabs.find((t) => t.build === build);
+    const tab = state?.tabs.find((t) => t.id === id);
     if (!state || !tab) return false;
 
-    const exports = exportsFor(state, build);
-    const dispRate = this.settingsStore.displayRateInfo().value;
-    const objectives = (): ObjectiveState[] =>
-      Object.values(this.objectivesStore.state());
-    const plan = planReconcile(objectives(), exports, tab.applied ?? {}, dispRate);
+    const store = solver.objectivesStore;
+    const exports = exportsFor(state, id);
+    const dispRate = solver.settingsStore.displayRateInfo().value;
+    const objectives = (): ObjectiveState[] => Object.values(store.state());
+    const plan = planReconcile(
+      objectives(),
+      exports,
+      tab.applied ?? {},
+      dispRate,
+    );
 
-    for (const { id, value } of plan.updates)
-      this.objectivesStore.updateRecordField(id, 'value', value);
+    for (const { id: objectiveId, value } of plan.updates)
+      store.updateRecordField(objectiveId, 'value', value);
     for (const { targetId, value } of plan.adds)
-      this.objectivesStore.add({
+      store.add({
         targetId,
         value,
         unit: ObjectiveUnit.Items,
@@ -324,57 +427,84 @@ export class Base {
     // Removing renumbers objectives, so look each one up again
     for (const itemId of plan.removes) {
       const objective = findExportObjective(objectives(), itemId);
-      if (objective) this.objectivesStore.remove(objective.id);
+      if (objective) store.remove(objective.id);
     }
 
     const applied = Object.fromEntries(
-      Object.entries(exports).map(([id, v]) => [id, v.toString()]),
+      Object.entries(exports).map(([itemId, v]) => [itemId, v.toString()]),
     );
     if (JSON.stringify(applied) !== JSON.stringify(tab.applied ?? {}))
-      this.updateTab(build, { applied });
+      this.updateTab(id, { applied });
 
     return plan.updates.length + plan.adds.length + plan.removes.length > 0;
   }
 
-  /** Records what the open tab imports and its totals, from the live solve */
-  private capture(build: string): void {
+  /** Records what a solved tab imports and its totals */
+  private capture(id: string, solver: Solver): void {
     const state = this.state();
-    if (!state?.tabs.some((t) => t.build === build)) return;
+    if (!state?.tabs.some((t) => t.id === id)) return;
 
-    const dispRate = this.settingsStore.displayRateInfo().value;
+    const dispRate = solver.settingsStore.displayRateInfo().value;
     const imports = importsFrom(
-      this.objectivesStore.steps(),
-      this.settingsStore.settings().excludedItemIds,
+      solver.objectivesStore.steps(),
+      solver.settingsStore.settings().excludedItemIds,
       dispRate,
     );
-    const totals = this.objectivesStore.totals();
-    const summary = summarize(totals.machines, totals.power ?? rational.zero);
+    const totals = solver.objectivesStore.totals();
+    const power: Rational = totals.power ?? rational.zero;
+    const summary = summarize(totals.machines, power);
 
     if (
-      JSON.stringify(state.imports?.[build] ?? {}) === JSON.stringify(imports) &&
-      JSON.stringify(state.summaries?.[build]) === JSON.stringify(summary)
+      JSON.stringify(state.imports?.[id] ?? {}) === JSON.stringify(imports) &&
+      JSON.stringify(state.summaries?.[id]) === JSON.stringify(summary)
     )
       return;
 
     this.update((s) => ({
       ...s,
-      imports: { ...s.imports, [build]: imports },
-      summaries: { ...s.summaries, [build]: summary },
+      imports: { ...s.imports, [id]: imports },
+      summaries: { ...s.summaries, [id]: summary },
     }));
+  }
+
+  private live(): Solver {
+    return {
+      objectivesStore: this.objectivesStore,
+      settingsStore: this.settingsStore,
+    };
+  }
+
+  private engine(): Headless {
+    this.headless ??= new Headless(this.injector);
+    return this.headless;
+  }
+
+  private savedQuery(build: string): string | undefined {
+    const modId = this.active()?.modId;
+    if (!modId) return undefined;
+    return this.preferencesStore.states()[modId]?.[build];
   }
 
   /** Waits until the URL has caught up with the stores */
   private async urlSettled(): Promise<void> {
-    await waitFor(
-      this.routerSync.urlUpdated.pipe(debounceTime(300)),
-      3000,
-    );
+    await waitFor(this.routerSync.urlUpdated.pipe(debounceTime(300)), 3000);
   }
 
-  private updateTab(build: string, partial: Partial<BaseTab>): void {
+  /** Runs one task at a time, in order */
+  private exclusive(task: () => Promise<void>): Promise<void> {
+    const run = this.lock.then(task, task);
+    this.lock = run.catch(() => undefined);
+    return run;
+  }
+
+  private findTab(id: string): BaseTab | undefined {
+    return this.state()?.tabs.find((t) => t.id === id);
+  }
+
+  private updateTab(id: string, partial: Partial<BaseTab>): void {
     this.update((s) => ({
       ...s,
-      tabs: s.tabs.map((t) => (t.build === build ? { ...t, ...partial } : t)),
+      tabs: s.tabs.map((t) => (t.id === id ? { ...t, ...partial } : t)),
     }));
   }
 

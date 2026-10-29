@@ -1,6 +1,11 @@
 import { rational, Rational } from '~/rational/rational';
 import { Step } from '~/solver/step';
-import { BaseState, TabImport, TabSummary } from '~/state/preferences/base-state';
+import {
+  BaseState,
+  BaseTab,
+  TabImport,
+  TabSummary,
+} from '~/state/preferences/base-state';
 import { ObjectiveState } from '~/state/objectives/objective';
 import { ObjectiveType } from '~/state/objectives/objective-type';
 import { ObjectiveUnit } from '~/state/objectives/objective-unit';
@@ -14,17 +19,36 @@ export function perMinute(perSecond: Rational | string): string {
   return `${Number(value.toFixed(1))}/min`;
 }
 
-/** Item id -> items per second that other tabs pull from `build` */
+/** Shown in the tab bar */
+export function tabLabel(tab: BaseTab): string {
+  return tab.label ?? tab.build ?? tab.id;
+}
+
+/**
+ * Bases saved before tabs had ids used the build name as the key. Gives such
+ * tabs an id equal to their build name, which keeps every reference valid.
+ */
+export function withTabIds(base: BaseState): BaseState {
+  if (base.tabs.every((t) => (t as Partial<BaseTab>).id != null)) return base;
+  return {
+    ...base,
+    tabs: base.tabs.map((t) =>
+      (t as Partial<BaseTab>).id != null ? t : { ...t, id: t.build ?? '' },
+    ),
+  };
+}
+
+/** Item id -> items per second that other tabs pull from tab `id` */
 export function exportsFor(
   base: BaseState,
-  build: string,
+  id: string,
 ): Record<string, Rational> {
   const result: Record<string, Rational> = {};
   for (const tab of base.tabs) {
-    if (tab.build === build) continue;
+    if (tab.id === id) continue;
     for (const [itemId, source] of Object.entries(tab.links ?? {})) {
-      if (source !== build) continue;
-      const rate = base.imports?.[tab.build]?.[itemId]?.rate;
+      if (source !== id) continue;
+      const rate = base.imports?.[tab.id]?.[itemId]?.rate;
       if (rate == null) continue;
       result[itemId] = (result[itemId] ?? rational.zero).add(rational(rate));
     }
@@ -33,10 +57,10 @@ export function exportsFor(
 }
 
 /** Whether a tab's export objectives are behind what other tabs now need */
-export function isStale(base: BaseState, build: string): boolean {
-  const tab = base.tabs.find((t) => t.build === build);
+export function isStale(base: BaseState, id: string): boolean {
+  const tab = base.tabs.find((t) => t.id === id);
   if (!tab) return false;
-  const exports = exportsFor(base, build);
+  const exports = exportsFor(base, id);
   const applied = tab.applied ?? {};
   const ids = new Set([...Object.keys(exports), ...Object.keys(applied)]);
   for (const id of ids) {
@@ -129,39 +153,23 @@ export function summarize(
   return { buildings: buildings.toString(), power: power.toString() };
 }
 
-/** Points every reference to a renamed build at its new name */
+/** Points tabs backed by a renamed build at its new name */
 export function renameBuild(
   base: BaseState,
   from: string,
   to: string,
 ): BaseState {
-  const rename = <T>(
-    record: Record<string, T> | undefined,
-  ): Record<string, T> | undefined => {
-    if (!record || !(from in record)) return record;
-    const next = { ...record, [to]: record[from] };
-    delete next[from];
-    return next;
-  };
-
+  base = withTabIds(base);
+  if (!base.tabs.some((t) => t.build === from)) return base;
   return {
     ...base,
-    tabs: base.tabs.map((t) => ({
-      ...t,
-      build: t.build === from ? to : t.build,
-      links: t.links
-        ? Object.fromEntries(
-            Object.entries(t.links).map(([i, s]) => [i, s === from ? to : s]),
-          )
-        : undefined,
-    })),
-    imports: rename(base.imports),
-    summaries: rename(base.summaries),
+    tabs: base.tabs.map((t) => (t.build === from ? { ...t, build: to } : t)),
   };
 }
 
 export interface BaseWarning {
-  build: string;
+  /** Tab id */
+  tab: string;
   itemId: string;
   kind: 'missingSource' | 'importsOwnExport';
   /** Supplying tab, for `missingSource` */
@@ -170,18 +178,25 @@ export interface BaseWarning {
 
 /** Problems worth flagging on the overview */
 export function baseWarnings(base: BaseState): BaseWarning[] {
-  const builds = new Set(base.tabs.map((t) => t.build));
+  const ids = new Set(base.tabs.map((t) => t.id));
   const warnings: BaseWarning[] = [];
   for (const tab of base.tabs) {
     for (const [itemId, source] of Object.entries(tab.links ?? {}))
-      if (!builds.has(source))
-        warnings.push({ build: tab.build, itemId, kind: 'missingSource', source });
+      if (!ids.has(source))
+        warnings.push({ tab: tab.id, itemId, kind: 'missingSource', source });
 
     // A tab asked to export an item it has excluded just imports it again
-    const exports = exportsFor(base, tab.build);
+    const exports = exportsFor(base, tab.id);
     for (const itemId of Object.keys(exports))
-      if (base.imports?.[tab.build]?.[itemId])
-        warnings.push({ build: tab.build, itemId, kind: 'importsOwnExport' });
+      if (base.imports?.[tab.id]?.[itemId])
+        warnings.push({ tab: tab.id, itemId, kind: 'importsOwnExport' });
   }
   return warnings;
+}
+
+/** Tabs whose exports changed, or that were never solved, in base order */
+export function tabsToProcess(base: BaseState): BaseTab[] {
+  return base.tabs.filter(
+    (t) => isStale(base, t.id) || (t.build != null && !base.summaries?.[t.id]),
+  );
 }

@@ -59,6 +59,7 @@ import { Tooltip } from '../tooltip/tooltip';
 import { BeltSelect } from './belt-select/belt-select';
 import { DetailRow } from './detail-row/detail-row';
 import { ExcludeButton } from './exclude-button/exclude-button';
+import { ImportSource } from './import-source/import-source';
 import { PowerPipe } from './pipes/power-pipe';
 import { StepHrefPipe } from './pipes/step-href-pipe';
 import { RecipesSelect } from './recipes-select/recipes-select';
@@ -83,6 +84,7 @@ import { TotalCell } from './total-cell/total-cell';
     BeltSelect,
     DetailRow,
     ExcludeButton,
+    ImportSource,
     PowerPipe,
     RatePipe,
     RecipesSelect,

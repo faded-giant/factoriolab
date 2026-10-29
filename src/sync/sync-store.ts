@@ -407,6 +407,9 @@ export class SyncStore {
           name,
           modId,
           tabs: b.tabs.map((t) => ({
+            id: t.id,
+            label: t.label,
+            location: t.location,
             build: t.build,
             links: sorted(t.links),
             applied: sorted(t.applied),

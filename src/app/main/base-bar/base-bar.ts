@@ -1,13 +1,19 @@
 import { Dialog } from '@angular/cdk/dialog';
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import {
-  faLink,
-  faRotate,
-  faXmark,
-} from '@fortawesome/free-solid-svg-icons';
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+} from '@angular/core';
+import { faLink, faPlus, faXmark } from '@fortawesome/free-solid-svg-icons';
 
 import { Base, OVERVIEW } from '~/base/base';
-import { baseWarnings, exportsFor, perMinute } from '~/base/base-logic';
+import {
+  baseWarnings,
+  exportsFor,
+  perMinute,
+  tabLabel,
+} from '~/base/base-logic';
 import { Button } from '~/components/button/button';
 import { Icon } from '~/components/icon/icon';
 import { Select } from '~/components/select/select';
@@ -26,7 +32,12 @@ interface OverviewItem {
 }
 
 interface OverviewRow {
-  build: string;
+  id: string;
+  label: string;
+  location?: string;
+  /** No saved build yet */
+  unused: boolean;
+  /** Has a build name, but that build was deleted */
   missing: boolean;
   stale: boolean;
   buildings?: string;
@@ -52,8 +63,9 @@ export class BaseBar {
   protected readonly OVERVIEW = OVERVIEW;
   protected readonly BaseLinksDialog = BaseLinksDialog;
   protected readonly faLink = faLink;
-  protected readonly faRotate = faRotate;
+  protected readonly faPlus = faPlus;
   protected readonly faXmark = faXmark;
+  protected readonly tabLabel = tabLabel;
 
   private readonly buildNames = computed(
     () => new Set(this.library.builds().map((b) => b.name)),
@@ -61,42 +73,49 @@ export class BaseBar {
 
   /** Saved builds not yet in the base */
   readonly addOptions = computed((): Option[] => {
-    const tabs = new Set(this.base.state()?.tabs.map((t) => t.build));
-    return this.library
-      .options()
-      .filter((o) => !tabs.has(o.value));
+    const builds = new Set(this.base.state()?.tabs.map((t) => t.build));
+    return this.library.options().filter((o) => !builds.has(o.value));
   });
+
+  /** Changes after each pick, so the add select resets */
+  protected readonly addKey = computed(() => this.addOptions().length);
 
   readonly rows = computed((): OverviewRow[] => {
     const state = this.base.state();
     if (!state) return [];
     const stale = this.base.staleTabs();
     const names = this.buildNames();
+    const labels = new Map(state.tabs.map((t) => [t.id, tabLabel(t)]));
 
     return state.tabs.map((tab) => {
-      const summary = state.summaries?.[tab.build];
-      const imports = state.imports?.[tab.build] ?? {};
+      const summary = state.summaries?.[tab.id];
+      const imports = state.imports?.[tab.id] ?? {};
       let rockets = rational.zero;
       for (const i of Object.values(imports))
         if (i.rockets) rockets = rockets.add(rational(i.rockets));
 
+      const power = summary
+        ? rational(summary.power).div(rational(1000n)).toNumber()
+        : undefined;
+
       return {
-        build: tab.build,
-        missing: !names.has(tab.build),
-        stale: stale.has(tab.build),
+        id: tab.id,
+        label: tabLabel(tab),
+        location: tab.location,
+        unused: tab.build == null,
+        missing: tab.build != null && !names.has(tab.build),
+        stale: stale.has(tab.id),
         buildings: summary?.buildings,
-        power: summary
-          ? `${Number(rational(summary.power).div(rational(1000n)).toNumber().toFixed(1))} MW`
-          : undefined,
+        power: power != null ? `${Number(power.toFixed(1))} MW` : undefined,
         imports: Object.entries(imports).map(([itemId, i]) => {
           const source = tab.links?.[itemId];
-          const from = source ? ` ← ${source}` : '';
+          const from = source ? ` ← ${labels.get(source) ?? source}` : '';
           return {
             itemId,
             text: `${this.itemName(itemId)} ${perMinute(i.rate)}${from}`,
           };
         }),
-        exports: Object.entries(exportsFor(state, tab.build)).map(
+        exports: Object.entries(exportsFor(state, tab.id)).map(
           ([itemId, rate]) => ({
             itemId,
             text: `${this.itemName(itemId)} ${perMinute(rate)}`,
@@ -112,23 +131,27 @@ export class BaseBar {
   readonly warnings = computed((): string[] => {
     const state = this.base.state();
     if (!state) return [];
+    const label = (id: string): string => {
+      const tab = state.tabs.find((t) => t.id === id);
+      return tab ? tabLabel(tab) : id;
+    };
+
     const warnings = baseWarnings(state).map((w) =>
       w.kind === 'missingSource'
-        ? `${w.build}: ${this.itemName(w.itemId)} is linked to "${w.source}", which is not a tab`
-        : `${w.build}: exports ${this.itemName(w.itemId)} but also has it excluded, so it would import it`,
+        ? `${label(w.tab)}: ${this.itemName(w.itemId)} is linked to a tab that no longer exists`
+        : `${label(w.tab)}: exports ${this.itemName(w.itemId)} but also has it excluded, so it would import it`,
     );
 
     // Imports with no supplying tab
     for (const tab of state.tabs)
-      for (const id of Object.keys(state.imports?.[tab.build] ?? {}))
+      for (const id of Object.keys(state.imports?.[tab.id] ?? {}))
         if (!tab.links?.[id])
-          warnings.push(`${tab.build}: ${this.itemName(id)} is imported but not linked to a tab`);
+          warnings.push(
+            `${tabLabel(tab)}: ${this.itemName(id)} is imported but not linked to a tab`,
+          );
 
     return warnings;
   });
-
-  /** Unique key for the select so it resets after each pick */
-  protected readonly addKey = computed(() => this.addOptions().length);
 
   private itemName(id: string): string {
     return this.settingsStore.dataset().itemRecord[id]?.name ?? id;

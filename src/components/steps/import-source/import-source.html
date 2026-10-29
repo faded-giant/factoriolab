@@ -1,0 +1,9 @@
+@if (show()) {
+  <lab-select
+    class="ms-1 w-36"
+    [options]="options()"
+    [value]="source()"
+    placeholder="base.importFrom"
+    (valueChange)="setSource($event)"
+  ></lab-select>
+}

@@ -1,8 +1,14 @@
 /** One planet (or platform) of a base, backed by a saved build */
 export interface BaseTab {
-  /** Name of the saved build shown in this tab */
-  build: string;
-  /** Imported item id -> build name of the tab that supplies it */
+  /** Stable key used by links, imports and summaries */
+  id: string;
+  /** Shown in the tab bar; falls back to the build name */
+  label?: string;
+  /** Location id the tab is limited to, e.g. 'fulgora' or 'space-platform' */
+  location?: string;
+  /** Name of the saved build behind this tab, once it has been created */
+  build?: string;
+  /** Imported item id -> id of the tab that supplies it */
   links?: Record<string, string>;
   /**
    * Export amounts (item id -> items per second) last written into this tab's
@@ -28,9 +34,9 @@ export interface TabSummary {
 /** Several builds linked by shipments, e.g. one tab per planet */
 export interface BaseState {
   tabs: BaseTab[];
-  /** Build name -> imported item id -> amount */
+  /** Tab id -> imported item id -> amount */
   imports?: Record<string, Record<string, TabImport>>;
-  /** Build name -> totals from its last solve */
+  /** Tab id -> totals from its last solve */
   summaries?: Record<string, TabSummary>;
   updatedAt?: number;
 }
