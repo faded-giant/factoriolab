@@ -6,6 +6,7 @@
   }}</span>
   @for (row of imports(); track row.itemId) {
     <div class="gap-2 flex items-center">
+      <lab-icon [value]="row.itemId" type="item"></lab-icon>
       <span class="grow">{{ row.name }}</span>
       <span class="text-sm text-gray-400">{{ row.rate }}</span>
       <lab-select
@@ -26,8 +27,12 @@
   <span class="mx-1 text-sm text-gray-300">{{
     'base.exports' | translate
   }}</span>
-  @for (line of exports(); track line) {
-    <span class="mx-1">{{ line }}</span>
+  @for (row of exports(); track row.itemId) {
+    <div class="gap-2 mx-1 flex items-center">
+      <lab-icon [value]="row.itemId" type="item"></lab-icon>
+      <span class="grow">{{ row.name }}</span>
+      <span class="text-sm text-gray-400">{{ row.rate }}</span>
+    </div>
   } @empty {
     <span class="mx-1 text-sm text-gray-400">{{
       'base.noExports' | translate

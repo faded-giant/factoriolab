@@ -9,6 +9,7 @@ import {
 import { Base, OVERVIEW } from '~/base/base';
 import { baseWarnings, exportsFor, perMinute } from '~/base/base-logic';
 import { Button } from '~/components/button/button';
+import { Icon } from '~/components/icon/icon';
 import { Select } from '~/components/select/select';
 import { Tooltip } from '~/components/tooltip/tooltip';
 import { Library } from '~/library/library';
@@ -19,20 +20,25 @@ import { TranslatePipe } from '~/translate/translate-pipe';
 
 import { BaseLinksDialog } from '../base-links-dialog/base-links-dialog';
 
+interface OverviewItem {
+  itemId: string;
+  text: string;
+}
+
 interface OverviewRow {
   build: string;
   missing: boolean;
   stale: boolean;
   buildings?: string;
   power?: string;
-  imports: string[];
-  exports: string[];
+  imports: OverviewItem[];
+  exports: OverviewItem[];
   rockets?: string;
 }
 
 @Component({
   selector: 'lab-base-bar',
-  imports: [Button, Select, Tooltip, TranslatePipe],
+  imports: [Button, Icon, Select, Tooltip, TranslatePipe],
   templateUrl: './base-bar.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block border-b border-gray-600' },
@@ -82,12 +88,19 @@ export class BaseBar {
         power: summary
           ? `${Number(rational(summary.power).div(rational(1000n)).toNumber().toFixed(1))} MW`
           : undefined,
-        imports: Object.entries(imports).map(([id, i]) => {
-          const source = tab.links?.[id];
-          return `${this.itemName(id)} ${perMinute(i.rate)}${source ? ` ← ${source}` : ''}`;
+        imports: Object.entries(imports).map(([itemId, i]) => {
+          const source = tab.links?.[itemId];
+          const from = source ? ` ← ${source}` : '';
+          return {
+            itemId,
+            text: `${this.itemName(itemId)} ${perMinute(i.rate)}${from}`,
+          };
         }),
         exports: Object.entries(exportsFor(state, tab.build)).map(
-          ([id, rate]) => `${this.itemName(id)} ${perMinute(rate)}`,
+          ([itemId, rate]) => ({
+            itemId,
+            text: `${this.itemName(itemId)} ${perMinute(rate)}`,
+          }),
         ),
         rockets: rockets.nonzero()
           ? `${Number(rockets.toNumber().toFixed(2))}/min`

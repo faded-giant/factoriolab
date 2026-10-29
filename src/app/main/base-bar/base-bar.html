@@ -105,15 +105,21 @@
               <td class="pe-3 py-1">{{ row.buildings ?? '–' }}</td>
               <td class="pe-3 py-1">{{ row.power ?? '–' }}</td>
               <td class="pe-3 py-1">
-                @for (line of row.imports; track line) {
-                  <div>{{ line }}</div>
+                @for (item of row.imports; track item.itemId) {
+                  <div class="gap-1 flex items-center">
+                    <lab-icon [value]="item.itemId" type="item"></lab-icon>
+                    {{ item.text }}
+                  </div>
                 } @empty {
                   –
                 }
               </td>
               <td class="pe-3 py-1">
-                @for (line of row.exports; track line) {
-                  <div>{{ line }}</div>
+                @for (item of row.exports; track item.itemId) {
+                  <div class="gap-1 flex items-center">
+                    <lab-icon [value]="item.itemId" type="item"></lab-icon>
+                    {{ item.text }}
+                  </div>
                 } @empty {
                   –
                 }

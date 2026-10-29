@@ -4,6 +4,7 @@ import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/c
 import { Base } from '~/base/base';
 import { exportsFor, importsFrom, perMinute } from '~/base/base-logic';
 import { DialogData } from '~/components/dialog/dialog';
+import { Icon } from '~/components/icon/icon';
 import { Select } from '~/components/select/select';
 import { Option } from '~/option/option';
 import { ObjectivesStore } from '~/state/objectives/objectives-store';
@@ -20,7 +21,7 @@ interface ImportRow {
 /** Choose which tab supplies each item the open tab imports */
 @Component({
   selector: 'lab-base-links-dialog',
-  imports: [Select, TranslatePipe],
+  imports: [Icon, Select, TranslatePipe],
   templateUrl: './base-links-dialog.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
@@ -57,7 +58,11 @@ export class BaseLinksDialog implements DialogData {
     const state = this.base.state();
     if (!state) return [];
     return Object.entries(exportsFor(state, this.base.tab())).map(
-      ([id, rate]) => `${this.itemName(id)} ${perMinute(rate)}`,
+      ([itemId, rate]) => ({
+        itemId,
+        name: this.itemName(itemId),
+        rate: perMinute(rate),
+      }),
     );
   });
 
