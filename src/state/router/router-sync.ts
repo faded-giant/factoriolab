@@ -436,6 +436,15 @@ export class RouterSync {
     );
     state.tableState = this.unzipTable(params);
 
+    // New builds start on the mod's default preset, if it has one
+    const fresh = Object.keys(params).every((k) => k === 'v');
+    const defaults = modData.defaults;
+    if (fresh && defaults && 'presets' in defaults) {
+      const preset = defaults.presets.find((p) => p.default);
+      if (preset)
+        state.settingsState = { ...state.settingsState, preset: preset.id };
+    }
+
     this.dispatch(state);
   }
 

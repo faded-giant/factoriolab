@@ -238,6 +238,11 @@ try {
     fulgoraQuery.slice(0, 60),
   );
 
+  // 6. A brand-new Space Age build starts on the legendary 4-beacon preset
+  await go(`${APP}/spa/list`, 8000);
+  const fresh = await evaluate('location.search');
+  check('new build uses the default preset', fresh.includes('mpr=6'), fresh);
+
   check(
     'no uncaught errors in the page',
     errors.length === 0,

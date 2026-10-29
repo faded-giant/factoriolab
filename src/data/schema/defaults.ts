@@ -18,6 +18,8 @@ export interface PresetJson extends BaseCustomJson {
    */
   id: number;
   label: string;
+  /** Preset used by builds that do not specify one */
+  default?: boolean;
 }
 
 export interface BaseCustomJson extends BaseDefaultsJson {
