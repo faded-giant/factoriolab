@@ -61,9 +61,21 @@
       placeholder="library.select"
       [attr.aria-label]="'library.select' | translate"
       [options]="library.options()"
-      [value]="library.current()"
+      [value]="library.active()?.name ?? library.current()"
       (valueChange)="$event && library.open($event)"
     ></lab-select>
+    @if (library.active()) {
+      <button
+        type="button"
+        labButton
+        size="large"
+        [border]="false"
+        [faIcon]="faLinkSlash"
+        labTooltip="library.detach"
+        [attr.aria-label]="'library.detach' | translate"
+        (click)="library.detach()"
+      ></button>
+    }
     <button
       type="button"
       labButton

@@ -1,4 +1,11 @@
-import { computed, inject, Service } from '@angular/core';
+import {
+  computed,
+  effect,
+  inject,
+  Service,
+  signal,
+  untracked,
+} from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router } from '@angular/router';
 import { filter, map } from 'rxjs';
@@ -21,9 +28,25 @@ export interface LibraryFolder {
   builds: LibraryBuild[];
 }
 
+export interface ActiveBuild {
+  modId: string;
+  name: string;
+}
+
 function currentQuery(): string {
   return window.location.search.substring(1);
 }
+
+/** Mod id from a router url like `/spa/list?z=...` */
+function urlModId(url: string): string | undefined {
+  return url.split('?')[0].split('/')[1] || undefined;
+}
+
+function sameBuild(a: ActiveBuild | null, b: ActiveBuild | null): boolean {
+  return a?.modId === b?.modId && a?.name === b?.name;
+}
+
+const AUTOSAVE_MS = 800;
 
 /** Saved states for the current mod, organized as a library of builds */
 @Service()
@@ -36,11 +59,82 @@ export class Library {
   /** The current URL state, comparable to saved state values */
   readonly query = toSignal(
     this.router.events.pipe(
-      filter((e) => e instanceof NavigationEnd),
+      filter((e): e is NavigationEnd => e instanceof NavigationEnd),
       map(currentQuery),
     ),
     { initialValue: currentQuery() },
   );
+
+  /** Mod id taken from the URL itself, in step with `query` */
+  private readonly urlModId = toSignal(
+    this.router.events.pipe(
+      filter((e): e is NavigationEnd => e instanceof NavigationEnd),
+      map((e) => urlModId(e.urlAfterRedirects)),
+    ),
+    { initialValue: urlModId(this.router.url) },
+  );
+
+  /** The saved build that edits are autosaved into, if any */
+  readonly active = signal<ActiveBuild | null>(null);
+
+  private autosave: ReturnType<typeof setTimeout> | undefined;
+  private pending: (() => void) | undefined;
+
+  constructor() {
+    // Opening or saving a build makes it the autosave target
+    effect(() => {
+      const name = this.current();
+      const modId = this.settingsStore.modId();
+      const next = name && modId ? { modId, name } : null;
+      if (next && !sameBuild(next, untracked(this.active)))
+        this.active.set(next);
+    });
+
+    // Write every change to the URL state back into the active build
+    effect(() => {
+      const query = this.query();
+      const modId = this.urlModId();
+      const active = this.active();
+      const enabled = this.preferencesStore.autosave();
+      this.cancelAutosave();
+      if (!active) return;
+
+      // Reset, switching game, or deleting the build ends autosave
+      const saved = this.preferencesStore.states()[active.modId]?.[active.name];
+      if (!query || modId !== active.modId || saved == null) {
+        this.active.set(null);
+        return;
+      }
+
+      if (!enabled || saved === query) return;
+      const pending = (): void => {
+        this.pending = undefined;
+        if (!sameBuild(this.active(), active) || this.query() !== query) return;
+        this.preferencesStore.saveState(active.modId, active.name, query);
+      };
+      this.pending = pending;
+      this.autosave = setTimeout(pending, AUTOSAVE_MS);
+    });
+  }
+
+  /** Stops autosaving into the active build; the current state is kept */
+  detach(): void {
+    this.cancelAutosave();
+    this.active.set(null);
+  }
+
+  /** Saves a pending autosave right away, e.g. before switching builds */
+  flush(): void {
+    const pending = this.pending;
+    this.cancelAutosave();
+    pending?.();
+  }
+
+  private cancelAutosave(): void {
+    clearTimeout(this.autosave);
+    this.autosave = undefined;
+    this.pending = undefined;
+  }
 
   readonly builds = computed((): LibraryBuild[] => {
     const modId = this.settingsStore.modId();
@@ -117,6 +211,9 @@ export class Library {
     if (!modId || !name) return;
     this.preferencesStore.renameState(modId, from, name);
     this.preferencesStore.updateBuildMeta(modId, name, meta);
+    const active = this.active();
+    if (active?.modId === modId && active.name === from)
+      this.active.set({ modId, name });
   }
 
   remove(name: string): void {

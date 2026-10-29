@@ -264,6 +264,13 @@
   </lab-form-field>
 
   <lab-checkbox
+    label="preferences.autosave"
+    labTooltip="preferences.autosaveTooltip"
+    [ngModel]="preferences().autosave"
+    (ngModelChange)="apply({ autosave: $event })"
+  ></lab-checkbox>
+
+  <lab-checkbox
     label="preferences.pinObjectives"
     [ngModel]="preferences().pinObjectives"
     (ngModelChange)="apply({ pinObjectives: $event })"

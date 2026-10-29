@@ -24,6 +24,8 @@ export interface PreferencesState {
   bypassLanding: boolean;
   showTechLabels: boolean;
   pinObjectives: boolean;
+  /** Write edits back into the open saved build automatically */
+  autosave: boolean;
   paused: boolean;
   convertObjectiveValues: boolean;
   glpkAlgorithm: GlpkAlgorithm;
@@ -44,6 +46,7 @@ export const initialPreferencesState: PreferencesState = {
   bypassLanding: false,
   showTechLabels: false,
   pinObjectives: false,
+  autosave: true,
   paused: false,
   convertObjectiveValues: false,
   glpkAlgorithm: 'simplex',

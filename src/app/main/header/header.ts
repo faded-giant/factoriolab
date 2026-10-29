@@ -11,6 +11,7 @@ import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import {
   faBookOpen,
   faChevronDown,
+  faLinkSlash,
   faSliders,
   faUserGear,
 } from '@fortawesome/free-solid-svg-icons';
@@ -57,6 +58,7 @@ export class Header {
 
   protected readonly faBookOpen = faBookOpen;
   protected readonly faChevronDown = faChevronDown;
+  protected readonly faLinkSlash = faLinkSlash;
   protected readonly LibraryDialog = LibraryDialog;
   protected readonly faSliders = faSliders;
   protected readonly faUserGear = faUserGear;

@@ -45,9 +45,11 @@ export class LibraryDialog implements DialogData {
 
   readonly header = 'library.header';
 
-  readonly saveName = signal(this.library.current() ?? '');
+  private readonly activeName =
+    this.library.active()?.name ?? this.library.current();
+  readonly saveName = signal(this.activeName ?? '');
   readonly saveFolder = signal(
-    this.library.builds().find((b) => b.name === this.library.current())?.meta
+    this.library.builds().find((b) => b.name === this.activeName)?.meta
       .folder ?? '',
   );
   readonly search = signal('');

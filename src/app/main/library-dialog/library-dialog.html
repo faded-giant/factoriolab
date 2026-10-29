@@ -159,7 +159,7 @@
             >
               <span
                 class="truncate"
-                [class.text-brand-400]="build.name === library.current()"
+                [class.text-brand-400]="build.name === library.active()?.name"
                 >{{ build.name }}</span
               >
               @if (build.meta.notes) {

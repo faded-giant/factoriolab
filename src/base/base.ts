@@ -246,6 +246,8 @@ export class Base {
   private async leaveCurrent(): Promise<boolean> {
     const tab = this.tab();
     if (!tab) return true;
+    // With autosave on, just save now instead of asking
+    if (this.preferencesStore.autosave()) this.library.flush();
     const saved = this.library.builds().find((b) => b.name === tab)?.query;
     if (saved == null || saved === this.library.query()) return true;
 
