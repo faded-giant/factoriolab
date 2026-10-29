@@ -1,5 +1,10 @@
 import { DialogRef } from '@angular/cdk/dialog';
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+} from '@angular/core';
 
 import { Base } from '~/base/base';
 import { exportsFor, importsFrom, perMinute } from '~/base/base-logic';

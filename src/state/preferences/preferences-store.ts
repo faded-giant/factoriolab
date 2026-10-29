@@ -127,8 +127,10 @@ export class PreferencesStore extends Store<PreferencesState> {
   renameState(modId: string, from: string, to: string): void {
     if (from === to) return;
     this.update((state) => {
+      const query = state.states[modId]?.[from];
+      if (query == null) return {};
       const gameStates = this._removeEntry(state.states[modId], from);
-      gameStates[to] = state.states[modId][from];
+      gameStates[to] = query;
       const states = spread(state.states, { [modId]: gameStates });
       const gameMeta = this._removeEntry(state.buildMeta[modId] ?? {}, from);
       const meta = state.buildMeta[modId]?.[from];

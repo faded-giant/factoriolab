@@ -1,15 +1,15 @@
-import { rational, Rational } from '~/rational/rational';
+import { Rational, rational } from '~/rational/rational';
 import { Step } from '~/solver/step';
+import { ObjectiveState } from '~/state/objectives/objective';
+import { ObjectiveType } from '~/state/objectives/objective-type';
+import { ObjectiveUnit } from '~/state/objectives/objective-unit';
+import { TotalValue } from '~/state/objectives/total-value';
 import {
   BaseState,
   BaseTab,
   TabImport,
   TabSummary,
 } from '~/state/preferences/base-state';
-import { ObjectiveState } from '~/state/objectives/objective';
-import { ObjectiveType } from '~/state/objectives/objective-type';
-import { ObjectiveUnit } from '~/state/objectives/objective-unit';
-import { TotalValue } from '~/state/objectives/total-value';
 
 /** Pure calculations for linking builds in a base, kept free of Angular */
 

@@ -2,13 +2,17 @@ import { computed, effect, inject, Service, signal } from '@angular/core';
 
 import { BaseState } from '~/state/preferences/base-state';
 import { BuildMeta } from '~/state/preferences/build-meta';
-import { PreferencesStore } from '~/state/preferences/preferences-store';
 import {
   initialPreferencesState,
   PreferencesState,
 } from '~/state/preferences/preferences-state';
+import { PreferencesStore } from '~/state/preferences/preferences-store';
 import { spread } from '~/utils/object';
-import { getStoredValue, storedSignal, storeValue } from '~/utils/stored-signal';
+import {
+  getStoredValue,
+  storedSignal,
+  storeValue,
+} from '~/utils/stored-signal';
 
 import { GitHubClient, GitHubConfig, GitHubError } from './github-client';
 
@@ -231,9 +235,11 @@ export class SyncStore {
     const base = this.readBase();
 
     const paths = new Set(
-      [...Object.keys(local), ...Object.keys(tree), ...Object.keys(base)].filter(
-        isManaged,
-      ),
+      [
+        ...Object.keys(local),
+        ...Object.keys(tree),
+        ...Object.keys(base),
+      ].filter(isManaged),
     );
 
     const remote: RemoteChanges = {
@@ -275,10 +281,16 @@ export class SyncStore {
         if (localChanged && !remoteChanged) {
           // Only this machine changed it: push
           if (l == null) {
-            if (r) await client.deleteFile(path, r, this.message('Delete', l, b));
+            if (r)
+              await client.deleteFile(path, r, this.message('Delete', l, b));
             delete base[path];
           } else {
-            const sha = await client.putFile(path, l, r, this.message('Save', l));
+            const sha = await client.putFile(
+              path,
+              l,
+              r,
+              this.message('Save', l),
+            );
             base[path] = { sha, content: l };
           }
         } else if (!localChanged && remoteChanged) {
@@ -290,7 +302,12 @@ export class SyncStore {
         } else if (r == null) {
           // Deleted remotely but edited here: keep the edit
           if (l != null) {
-            const sha = await client.putFile(path, l, undefined, this.message('Save', l));
+            const sha = await client.putFile(
+              path,
+              l,
+              undefined,
+              this.message('Save', l),
+            );
             base[path] = { sha, content: l };
           } else delete base[path];
         } else {
@@ -311,7 +328,12 @@ export class SyncStore {
           if (l != null && b != null && path === PREFERENCES_FILE) {
             // For preferences, this machine's latest choice wins, unless this
             // machine never synced: then its defaults must not clobber yours
-            const sha = await client.putFile(path, l, r, this.message('Save', l));
+            const sha = await client.putFile(
+              path,
+              l,
+              r,
+              this.message('Save', l),
+            );
             base[path] = { sha, content: l };
           } else {
             takeRemote(path, theirs);
@@ -447,7 +469,8 @@ export class SyncStore {
   private differsFromBase(files: Files): boolean {
     const base = this.readBase();
     const paths = new Set([...Object.keys(files), ...Object.keys(base)]);
-    for (const path of paths) if (files[path] !== base[path]?.content) return true;
+    for (const path of paths)
+      if (files[path] !== base[path]?.content) return true;
     return false;
   }
 
@@ -473,7 +496,7 @@ export class SyncStore {
     if (raw) {
       try {
         const build = JSON.parse(raw) as Partial<BuildFile>;
-        if (build.name) return `${action} ${build.name} (${build.modId})`;
+        if (build.name) return `${action} ${build.name} (${build.modId ?? ''})`;
       } catch {
         // Fall through
       }

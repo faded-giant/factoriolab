@@ -6,7 +6,7 @@ import {
   signal,
 } from '@angular/core';
 import { Title } from '@angular/platform-browser';
-import { Params, Router } from '@angular/router';
+import { Router } from '@angular/router';
 import { debounceTime, firstValueFrom, map, race, Subject, timer } from 'rxjs';
 
 import { ItemsStore } from '~/state/items/items-store';
@@ -33,7 +33,7 @@ class HeadlessRouterSync extends RouterSync {
     const params = await this.getHash(zState);
     // Serialize like the router does, so queries match real URLs exactly
     const url = this.appRouter.serializeUrl(
-      this.appRouter.createUrlTree(['/'], { queryParams: params as Params }),
+      this.appRouter.createUrlTree(['/'], { queryParams: params }),
     );
     const index = url.indexOf('?');
     this.query.set(index === -1 ? '' : url.substring(index + 1));

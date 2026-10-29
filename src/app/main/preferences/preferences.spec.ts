@@ -77,10 +77,15 @@ describe('Preferences', () => {
       spyOn(component, 'params').and.returnValue('params');
       spyOn(component['preferencesStore'], 'saveState');
       spyOn(component, 'selectedState').and.returnValue('state');
-      spyOn(component['preferencesStore'], 'removeState');
+      spyOn(component['preferencesStore'], 'renameState');
       component.saveState();
       expect(component['preferencesStore'].saveState).toHaveBeenCalled();
-      expect(component['preferencesStore'].removeState).toHaveBeenCalled();
+      // Renaming keeps the build's folder, tags and notes
+      expect(component['preferencesStore'].renameState).toHaveBeenCalledWith(
+        jasmine.any(String),
+        'state',
+        'value',
+      );
     });
   });
 

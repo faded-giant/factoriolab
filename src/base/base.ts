@@ -18,7 +18,7 @@ import {
 
 import { Library } from '~/library/library';
 import { Option } from '~/option/option';
-import { rational, Rational } from '~/rational/rational';
+import { Rational, rational } from '~/rational/rational';
 import { ObjectiveState } from '~/state/objectives/objective';
 import { ObjectiveType } from '~/state/objectives/objective-type';
 import { ObjectiveUnit } from '~/state/objectives/objective-unit';
@@ -143,7 +143,9 @@ export class Base {
       const active = this.active();
       const modId = this.settingsStore.modId();
       if (active && modId && active.modId !== modId)
-        untracked(() => this.close());
+        untracked(() => {
+          this.close();
+        });
     });
 
     // When the open tab's build is saved, record what it now imports
@@ -154,14 +156,18 @@ export class Base {
       const saved = this.library.builds().find((b) => b.name === build)?.query;
       this.objectivesStore.steps();
       if (!id || this.busy() || saved == null || saved !== query) return;
-      untracked(() => this.capture(id, this.live()));
+      untracked(() => {
+        this.capture(id, this.live());
+      });
     });
 
     // Any tab whose exports changed (or that was never solved) gets updated
     effect(() => {
       const state = this.state();
       if (!state || this.busy() || !tabsToProcess(state).length) return;
-      untracked(() => this.schedule());
+      untracked(() => {
+        this.schedule();
+      });
     });
   }
 
@@ -171,8 +177,15 @@ export class Base {
     if (!modId || !name) return;
     const tabs: BaseTab[] = builds.length
       ? builds.map((build) => ({ id: build, build }))
-      : this.planets().map((p) => ({ id: p.id, label: p.name, location: p.id }));
-    this.preferencesStore.saveBase(modId, name, { tabs, updatedAt: Date.now() });
+      : this.planets().map((p) => ({
+          id: p.id,
+          label: p.name,
+          location: p.id,
+        }));
+    this.preferencesStore.saveBase(modId, name, {
+      tabs,
+      updatedAt: Date.now(),
+    });
   }
 
   open(name: string): void {

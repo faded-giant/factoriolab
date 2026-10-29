@@ -28,7 +28,9 @@
 
 <div class="gap-2 p-4 flex flex-col">
   <div class="gap-1 flex flex-col">
-    <span class="mx-1 text-sm text-gray-300">{{ 'sync.header' | translate }}</span>
+    <span class="mx-1 text-sm text-gray-300">{{
+      'sync.header' | translate
+    }}</span>
     @if (syncStore.config(); as config) {
       <span class="mx-1 text-sm">
         {{ config.owner }}/{{ config.repo }} · {{ syncStatusText() }}
