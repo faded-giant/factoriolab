@@ -3,18 +3,31 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  effect,
+  ElementRef,
   inject,
+  signal,
+  viewChild,
 } from '@angular/core';
-import { faLink, faPlus, faXmark } from '@fortawesome/free-solid-svg-icons';
+import {
+  faExclamationTriangle,
+  faLink,
+  faPencil,
+  faPlus,
+  faTrash,
+  faXmark,
+} from '@fortawesome/free-solid-svg-icons';
 
 import { Base, OVERVIEW } from '~/base/base';
 import {
   baseWarnings,
   exportsFor,
+  launchesFor,
   perMinute,
   tabLabel,
 } from '~/base/base-logic';
 import { Button } from '~/components/button/button';
+import { Confirm } from '~/components/confirm/confirm';
 import { Icon } from '~/components/icon/icon';
 import { Select } from '~/components/select/select';
 import { Tooltip } from '~/components/tooltip/tooltip';
@@ -57,15 +70,63 @@ interface OverviewRow {
 export class BaseBar {
   protected readonly base = inject(Base);
   protected readonly dialog = inject(Dialog);
+  private readonly confirm = inject(Confirm);
   private readonly library = inject(Library);
   private readonly settingsStore = inject(SettingsStore);
 
   protected readonly OVERVIEW = OVERVIEW;
   protected readonly BaseLinksDialog = BaseLinksDialog;
   protected readonly faLink = faLink;
+  protected readonly faPencil = faPencil;
   protected readonly faPlus = faPlus;
+  protected readonly faTrash = faTrash;
   protected readonly faXmark = faXmark;
   protected readonly tabLabel = tabLabel;
+
+  /** Id of the tab being renamed */
+  protected readonly renaming = signal<string | null>(null);
+  /** Whether a new platform is being named */
+  protected readonly naming = signal(false);
+  private readonly nameInput =
+    viewChild<ElementRef<HTMLInputElement>>('nameInput');
+
+  constructor() {
+    // Name inputs take focus as soon as they appear
+    effect(() => {
+      const input = this.nameInput()?.nativeElement;
+      input?.focus();
+      input?.select();
+    });
+  }
+
+  protected rename(id: string, name: string): void {
+    if (this.renaming() !== id) return;
+    this.renaming.set(null);
+    this.base.renameTab(id, name);
+  }
+
+  /** Adds a platform with the typed name, or cancels if nothing was typed */
+  protected addPlatform(name: string): void {
+    if (!this.naming()) return;
+    this.naming.set(false);
+    if (name.trim()) this.base.addPlatform(name);
+  }
+
+  protected removeTab(id: string): void {
+    this.confirm
+      .open({
+        header: 'base.deleteTabHeader',
+        message: 'base.deleteTabMessage',
+        icon: faExclamationTriangle,
+        actions: [
+          { text: 'delete', value: true, icon: faTrash },
+          { text: 'cancel', value: false, icon: faXmark },
+        ],
+      })
+      .subscribe((res) => {
+        if (res) this.base.removeTab(id);
+      });
+  }
 
   private readonly buildNames = computed(
     () => new Set(this.library.builds().map((b) => b.name)),
@@ -90,9 +151,7 @@ export class BaseBar {
     return state.tabs.map((tab) => {
       const summary = state.summaries?.[tab.id];
       const imports = state.imports?.[tab.id] ?? {};
-      let rockets = rational.zero;
-      for (const i of Object.values(imports))
-        if (i.rockets) rockets = rockets.add(rational(i.rockets));
+      const rockets = launchesFor(state, tab.id).mul(rational(60n));
 
       const power = summary
         ? rational(summary.power).div(rational(1000n)).toNumber()

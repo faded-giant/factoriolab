@@ -209,11 +209,18 @@ export class Library {
   update(from: string, name: string, meta: BuildMeta): void {
     const modId = this.settingsStore.modId();
     if (!modId || !name) return;
-    this.preferencesStore.renameState(modId, from, name);
+    this.rename(from, name);
     this.preferencesStore.updateBuildMeta(modId, name, meta);
+  }
+
+  /** Renames a build, and keeps autosaving into it if it is open */
+  rename(from: string, to: string): void {
+    const modId = this.settingsStore.modId();
+    if (!modId || !to) return;
+    this.preferencesStore.renameState(modId, from, to);
     const active = this.active();
     if (active?.modId === modId && active.name === from)
-      this.active.set({ modId, name });
+      this.active.set({ modId, name: to });
   }
 
   remove(name: string): void {

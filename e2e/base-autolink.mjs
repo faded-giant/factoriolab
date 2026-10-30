@@ -238,7 +238,88 @@ try {
     fulgoraQuery.slice(0, 60),
   );
 
-  // 6. A brand-new Space Age build starts on the legendary 4-beacon preset
+  // Fulgora launches the holmium plate to Nauvis, so it also makes rocket
+  // parts: 50 per rocket launched
+  const parts = f2.applied?.['rocket-part'];
+  check('Fulgora makes rocket parts for its launches', !!parts, parts);
+  check(
+    'Fulgora build has a rocket part objective',
+    fulgoraQuery.includes('rocket-part'),
+    fulgoraQuery.slice(0, 80),
+  );
+  const nauvisApplied = b2.tabs.find((t) => t.id === 'nauvis').applied ?? {};
+  check(
+    'Nauvis launches nothing',
+    !('rocket-part' in nauvisApplied),
+    JSON.stringify(nauvisApplied),
+  );
+
+  // 6. Name a new platform, rename it, then delete it
+  const click = (selector, text) =>
+    evaluate(`(() => {
+      const el = [...document.querySelectorAll(${JSON.stringify(selector)})]
+        .find((b) => b.textContent.trim() === ${JSON.stringify(text)}
+          || b.getAttribute('aria-label') === ${JSON.stringify(text)});
+      el?.click();
+      return !!el;
+    })()`);
+  const type = (value) =>
+    evaluate(`(() => {
+      const input = document.activeElement;
+      if (input?.tagName !== 'INPUT') return false;
+      input.value = ${JSON.stringify(value)};
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      return true;
+    })()`);
+  const savedBase = async () =>
+    JSON.parse(await evaluate(`localStorage.getItem('preferences')`)).bases.spa
+      .T;
+
+  check('clicked + Platform', await click('lab-base-bar button', 'Platform'));
+  await sleep(500);
+  check('typed the platform name', await type('Iron Ship'));
+  await sleep(1000);
+  let ship = (await savedBase()).tabs.find((t) => t.label === 'Iron Ship');
+  check(
+    'platform created with its name',
+    ship?.location === 'space-platform',
+    JSON.stringify(ship),
+  );
+  check(
+    'opened the platform tab',
+    await click('lab-base-bar button', 'Iron Ship'),
+  );
+  await sleep(6000);
+  check('clicked rename', await click('lab-base-bar button', 'Rename tab'));
+  await sleep(500);
+  check('typed the new name', await type('Copper Ship'));
+  await sleep(2000);
+  const prefs3 = JSON.parse(
+    await evaluate(`localStorage.getItem('preferences')`),
+  );
+  ship = prefs3.bases.spa.T.tabs.find((t) => t.id === ship?.id);
+  check(
+    'platform renamed',
+    ship?.label === 'Copper Ship',
+    JSON.stringify(ship),
+  );
+  check(
+    'its build renamed with it',
+    ship?.build === 'T – Copper Ship' &&
+      prefs3.states.spa['T – Copper Ship'] != null &&
+      prefs3.states.spa['T – Iron Ship'] == null,
+    ship?.build,
+  );
+  check('clicked delete', await click('lab-base-bar button', 'Delete tab'));
+  await sleep(500);
+  check('confirmed', await click('button', 'Delete'));
+  await sleep(1000);
+  check(
+    'platform deleted',
+    !(await savedBase()).tabs.some((t) => t.id === ship?.id),
+  );
+
+  // 7. A brand-new Space Age build starts on the legendary 4-beacon preset
   await go(`${APP}/spa/list`, 8000);
   const fresh = await evaluate('location.search');
   check('new build uses the default preset', fresh.includes('mpr=6'), fresh);

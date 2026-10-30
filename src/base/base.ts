@@ -30,11 +30,13 @@ import { SettingsStore } from '~/state/settings/settings-store';
 import { storedSignal } from '~/utils/stored-signal';
 
 import {
-  exportsFor,
+  demandsFor,
   findExportObjective,
   importsFrom,
   isStale,
   planReconcile,
+  RocketCost,
+  SPACE_PLATFORM,
   summarize,
   tabLabel,
   tabsToProcess,
@@ -48,7 +50,7 @@ export interface ActiveBase {
 }
 
 export const OVERVIEW = '';
-export const SPACE_PLATFORM = 'space-platform';
+const ROCKET_PART = 'rocket-part';
 const MAX_PASSES = 8;
 
 function waitFor(source: Observable<unknown>, ms: number): Promise<boolean> {
@@ -104,11 +106,22 @@ export class Base {
   readonly working = signal<string | null>(null);
   readonly error = signal<string | null>(null);
 
+  /** What launching one rocket takes, if the game has rockets */
+  readonly rocketCost = computed((): RocketCost | undefined => {
+    const data = this.settingsStore.dataset();
+    if (!data.itemRecord[ROCKET_PART]) return undefined;
+    const silo = data.machineIds
+      .map((id) => data.machineRecord[id]?.silo)
+      .find((s) => s != null);
+    return silo ? { itemId: ROCKET_PART, parts: silo.parts } : undefined;
+  });
+
   readonly staleTabs = computed(() => {
     const state = this.state();
+    const rocket = this.rocketCost();
     if (!state) return new Set<string>();
     return new Set(
-      state.tabs.map((t) => t.id).filter((id) => isStale(state, id)),
+      state.tabs.map((t) => t.id).filter((id) => isStale(state, id, rocket)),
     );
   });
 
@@ -164,7 +177,8 @@ export class Base {
     // Any tab whose exports changed (or that was never solved) gets updated
     effect(() => {
       const state = this.state();
-      if (!state || this.busy() || !tabsToProcess(state).length) return;
+      const rocket = this.rocketCost();
+      if (!state || this.busy() || !tabsToProcess(state, rocket).length) return;
       untracked(() => {
         this.schedule();
       });
@@ -213,17 +227,38 @@ export class Base {
     this.preferencesStore.removeBase(modId, name);
   }
 
-  addPlatform(): void {
+  /** Name the next new platform gets if none is given */
+  nextPlatformName(): string {
+    const labels = new Set(this.state()?.tabs.map(tabLabel));
+    let n = 1;
+    while (labels.has(`Platform ${n.toString()}`)) n++;
+    return `Platform ${n.toString()}`;
+  }
+
+  addPlatform(name?: string): void {
+    const label = name?.trim() || this.nextPlatformName();
     this.update((s) => {
       let n = 1;
-      while (s.tabs.some((t) => t.id === `platform-${n}`)) n++;
+      while (s.tabs.some((t) => t.id === `platform-${n.toString()}`)) n++;
       const tab: BaseTab = {
-        id: `platform-${n}`,
-        label: `Platform ${n}`,
+        id: `platform-${n.toString()}`,
+        label,
         location: SPACE_PLATFORM,
       };
       return { ...s, tabs: [...s.tabs, tab] };
     });
+  }
+
+  /** Renames a tab, and its build if it still has the name made for it */
+  renameTab(id: string, name: string): void {
+    const active = this.active();
+    const tab = this.findTab(id);
+    const label = name.trim();
+    if (!active || !tab || !label || label === tabLabel(tab)) return;
+    this.updateTab(id, { label });
+    if (tab.build !== this.buildName(tab)) return;
+    const to = this.buildName({ ...tab, label });
+    if (this.savedQuery(to) == null) this.library.rename(tab.build, to);
   }
 
   /** Adds an existing saved build as a tab */
@@ -292,7 +327,8 @@ export class Base {
         await this.showLive(build);
         this.tab.set(id);
         const state = this.state();
-        if (state && isStale(state, id)) await this.reconcileLive(id, build);
+        if (state && isStale(state, id, this.rocketCost()))
+          await this.reconcileLive(id, build);
         this.capture(id, this.live());
       } catch (err) {
         this.error.set(String(err));
@@ -330,7 +366,7 @@ export class Base {
     for (let pass = 0; pass < MAX_PASSES; pass++) {
       const state = this.state();
       if (!state) return;
-      const todo = tabsToProcess(state);
+      const todo = tabsToProcess(state, this.rocketCost());
       if (!todo.length) return;
       for (const tab of todo) {
         this.working.set(tabLabel(tab));
@@ -375,7 +411,7 @@ export class Base {
   private async materialize(tab: BaseTab): Promise<string> {
     const active = this.active();
     if (!active) throw new Error('No base is open');
-    const name = `${active.name} – ${tabLabel(tab)}`;
+    const name = this.buildName(tab);
 
     if (this.savedQuery(name) == null) {
       const headless = this.engine();
@@ -418,7 +454,7 @@ export class Base {
     if (!state || !tab) return false;
 
     const store = solver.objectivesStore;
-    const exports = exportsFor(state, id);
+    const exports = demandsFor(state, id, this.rocketCost());
     const dispRate = solver.settingsStore.displayRateInfo().value;
     const objectives = (): ObjectiveState[] => Object.values(store.state());
     const plan = planReconcile(
@@ -478,6 +514,11 @@ export class Base {
       imports: { ...s.imports, [id]: imports },
       summaries: { ...s.summaries, [id]: summary },
     }));
+  }
+
+  /** Name of the build made for a tab */
+  private buildName(tab: BaseTab): string {
+    return `${this.active()?.name ?? ''} – ${tabLabel(tab)}`;
   }
 
   private live(): Solver {

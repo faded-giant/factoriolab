@@ -11,16 +11,53 @@
     ></button>
     @for (tab of base.state()?.tabs ?? []; track tab.id) {
       <div class="flex items-center" [class.opacity-60]="!tab.build">
-        <button
-          type="button"
-          labButton
-          [color]="base.tab() === tab.id ? 'brand' : 'gray'"
-          [text]="tabLabel(tab)"
-          [iconType]="tab.location ? 'location' : undefined"
-          [icon]="tab.location"
-          [disabled]="!!base.busy()"
-          (click)="base.select(tab.id)"
-        ></button>
+        @if (renaming() === tab.id) {
+          <input
+            #nameInput
+            type="text"
+            class="input w-40"
+            [value]="tabLabel(tab)"
+            [attr.aria-label]="'base.renameTab' | translate"
+            (keydown.enter)="rename(tab.id, nameInput.value)"
+            (keydown.escape)="renaming.set(null)"
+            (blur)="rename(tab.id, nameInput.value)"
+          />
+        } @else {
+          <button
+            type="button"
+            labButton
+            [color]="base.tab() === tab.id ? 'brand' : 'gray'"
+            [text]="tabLabel(tab)"
+            [iconType]="tab.location ? 'location' : undefined"
+            [icon]="tab.location"
+            [disabled]="!!base.busy()"
+            (click)="base.select(tab.id)"
+          ></button>
+          @if (base.tab() === tab.id) {
+            <button
+              type="button"
+              labButton
+              size="small"
+              [border]="false"
+              [faIcon]="faPencil"
+              labTooltip="base.renameTab"
+              [attr.aria-label]="'base.renameTab' | translate"
+              [disabled]="!!base.busy()"
+              (click)="renaming.set(tab.id)"
+            ></button>
+            <button
+              type="button"
+              labButton
+              size="small"
+              [border]="false"
+              [faIcon]="faTrash"
+              labTooltip="base.deleteTab"
+              [attr.aria-label]="'base.deleteTab' | translate"
+              [disabled]="!!base.busy()"
+              (click)="removeTab(tab.id)"
+            ></button>
+          }
+        }
         @if (base.staleTabs().has(tab.id)) {
           <span
             class="ms-1 size-2 rounded-full bg-complement-400"
@@ -30,16 +67,29 @@
       </div>
     }
     @if (base.hasPlatforms()) {
-      <button
-        type="button"
-        labButton
-        [faIcon]="faPlus"
-        iconType="location"
-        icon="space-platform"
-        text="base.addPlatform"
-        [disabled]="!!base.busy()"
-        (click)="base.addPlatform()"
-      ></button>
+      @if (naming()) {
+        <input
+          #nameInput
+          type="text"
+          class="input w-40"
+          [placeholder]="base.nextPlatformName()"
+          [attr.aria-label]="'base.platformName' | translate"
+          (keydown.enter)="addPlatform(nameInput.value)"
+          (keydown.escape)="naming.set(false)"
+          (blur)="addPlatform(nameInput.value)"
+        />
+      } @else {
+        <button
+          type="button"
+          labButton
+          [faIcon]="faPlus"
+          iconType="location"
+          icon="space-platform"
+          text="base.addPlatform"
+          [disabled]="!!base.busy()"
+          (click)="naming.set(true)"
+        ></button>
+      }
     }
     @if (addOptions().length) {
       @for (key of [addKey()]; track key) {
@@ -94,7 +144,9 @@
             <th class="pe-3 py-1">{{ 'base.power' | translate }}</th>
             <th class="pe-3 py-1">{{ 'base.imports' | translate }}</th>
             <th class="pe-3 py-1">{{ 'base.exports' | translate }}</th>
-            <th class="pe-3 py-1">{{ 'base.rockets' | translate }}</th>
+            <th class="pe-3 py-1" labTooltip="base.rocketsTooltip">
+              {{ 'base.rockets' | translate }}
+            </th>
             <th></th>
           </tr>
         </thead>
