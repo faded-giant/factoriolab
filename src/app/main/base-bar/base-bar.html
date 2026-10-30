@@ -216,8 +216,16 @@
               <td class="pe-3 py-1">
                 @if (row.silos; as silos) {
                   <div class="font-semibold">{{ silos.total }}</div>
-                  @for (line of silos.lines; track line) {
-                    <div class="text-xs text-gray-400">{{ line }}</div>
+                  @for (line of silos.lines; track $index) {
+                    <div class="text-xs text-gray-400">{{ line.text }}</div>
+                    @for (item of line.items; track item.itemId) {
+                      <div
+                        class="gap-1 ms-2 text-xs flex items-center text-gray-400"
+                      >
+                        <lab-icon [value]="item.itemId" type="item"></lab-icon>
+                        {{ item.text }}
+                      </div>
+                    }
                   }
                 } @else {
                   –

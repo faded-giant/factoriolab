@@ -76,11 +76,17 @@ interface OverviewRow {
   exports: OverviewItem[];
   rockets?: string;
   /** Silos to build, with how that number was reached */
-  silos?: { total: number; lines: string[] };
+  silos?: { total: number; lines: SiloLine[] };
   /** For platforms */
   lap?: string;
   cargo?: string;
   buffers: BufferRow[];
+}
+
+interface SiloLine {
+  text: string;
+  /** Silos each item needs for this line, most first */
+  items: OverviewItem[];
 }
 
 interface BufferRow {
@@ -281,14 +287,21 @@ export class BaseBar {
   ): OverviewRow['silos'] {
     const plan = siloPlan(state, id);
     if (!plan) return undefined;
-    const lines: string[] = [];
-    if (plan.production) lines.push(`${plan.production.toString()} to keep up`);
+    const lines: SiloLine[] = [];
+    const line = (text: string): void => {
+      lines.push({ text, items: [] });
+    };
+    if (plan.production) line(`${plan.production.toString()} to keep up`);
     for (const b of plan.buffers)
-      lines.push(
-        `${b.silos.toString()} to hold ${b.rockets.toString()} rocket${b.rockets === 1 ? '' : 's'} for ${labels.get(b.platform) ?? b.platform}`,
-      );
+      lines.push({
+        text: `${b.silos.toString()} to hold ${b.rockets.toString()} rocket${b.rockets === 1 ? '' : 's'} for ${labels.get(b.platform) ?? b.platform}`,
+        items: b.items.map((i) => ({
+          itemId: i.itemId,
+          text: `${this.itemName(i.itemId)} ${i.silos.toString()}`,
+        })),
+      });
     for (const p of plan.unknown)
-      lines.push(`${labels.get(p) ?? p}: no lap time yet`);
+      line(`${labels.get(p) ?? p}: no lap time yet`);
     return { total: plan.total, lines };
   }
 

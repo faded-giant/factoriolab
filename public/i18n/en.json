@@ -74,7 +74,7 @@
     "secondRocket": "Count a second rocket per silo",
     "secondRocketTooltip": "Each silo has one loaded rocket waiting. With this on, it also counts the next rocket, whose parts are already made, which launches shortly after the first.",
     "silos": "Silos",
-    "silosTooltip": "Rocket silos to build: enough to keep up with launches, and to have a whole lap of rockets loaded and waiting for each platform that picks up here",
+    "silosTooltip": "Rocket silos to build: enough to keep up with launches, and to have a whole lap of rockets loaded and waiting for each platform that picks up here. Each platform's buffer is split by item, so you can see which import needs the most silos",
     "speed": "Cruise speed",
     "stale": "needs update",
     "stop": "Stop",

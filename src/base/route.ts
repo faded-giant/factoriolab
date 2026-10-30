@@ -164,12 +164,21 @@ export function carriedBy(base: BaseState, platformId: string): Shipment[] {
   return result;
 }
 
+export interface SiloItem {
+  itemId: string;
+  /** Rockets of this item waiting when the platform arrives */
+  rockets: number;
+  silos: number;
+}
+
 export interface SiloBuffer {
   /** Platform tab id */
   platform: string;
   /** Rockets that have to be ready when the platform arrives */
   rockets: number;
   silos: number;
+  /** The same buffer by item, most silos first */
+  items: SiloItem[];
 }
 
 export interface SiloPlan {
@@ -192,7 +201,8 @@ export function siloPlan(base: BaseState, id: string): SiloPlan | undefined {
   const source = base.tabs.find((t) => t.id === id);
   if (!source?.location || source.location === SPACE_PLATFORM) return undefined;
 
-  const perCarrier = new Map<string, number>();
+  // Carrier id -> item id -> rockets per minute
+  const perCarrier = new Map<string, Map<string, number>>();
   for (const tab of base.tabs) {
     if (tab.id === id) continue;
     for (const [itemId, from] of Object.entries(tab.links ?? {})) {
@@ -200,9 +210,11 @@ export function siloPlan(base: BaseState, id: string): SiloPlan | undefined {
       const rockets = base.imports?.[tab.id]?.[itemId]?.rockets;
       const carrier = carrierFor(base, tab, itemId);
       if (rockets == null || !carrier) continue;
-      perCarrier.set(
-        carrier.id,
-        (perCarrier.get(carrier.id) ?? 0) + rational(rockets).toNumber(),
+      const items = perCarrier.get(carrier.id) ?? new Map<string, number>();
+      perCarrier.set(carrier.id, items);
+      items.set(
+        itemId,
+        (items.get(itemId) ?? 0) + rational(rockets).toNumber(),
       );
     }
   }
@@ -212,14 +224,29 @@ export function siloPlan(base: BaseState, id: string): SiloPlan | undefined {
   const perSilo = base.secondRocket ? 2 : 1;
   const buffers: SiloBuffer[] = [];
   const unknown: string[] = [];
-  for (const [platform, perMinute] of perCarrier) {
+  const ready = (perMinute: number, lap: number): number =>
+    Math.ceil(perMinute * lap - 1e-9);
+  for (const [platform, perItem] of perCarrier) {
     const lap = lapMinutes(base.tabs.find((t) => t.id === platform)?.route);
     if (lap == null) {
       unknown.push(platform);
       continue;
     }
-    const rockets = Math.ceil(perMinute * lap - 1e-9);
-    buffers.push({ platform, rockets, silos: Math.ceil(rockets / perSilo) });
+    let perMinute = 0;
+    for (const r of perItem.values()) perMinute += r;
+    const rockets = ready(perMinute, lap);
+    const items = [...perItem]
+      .map(([itemId, r]) => {
+        const n = ready(r, lap);
+        return { itemId, rockets: n, silos: Math.ceil(n / perSilo) };
+      })
+      .sort((a, b) => b.silos - a.silos || b.rockets - a.rockets);
+    buffers.push({
+      platform,
+      rockets,
+      silos: Math.ceil(rockets / perSilo),
+      items,
+    });
   }
 
   if (!production && !buffers.length && !unknown.length) return undefined;

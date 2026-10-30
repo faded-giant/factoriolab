@@ -184,6 +184,11 @@ try {
     pageText.match(/.*rocket.*for.*/)?.[0],
   );
   check(
+    'silo buffer is broken down by item',
+    /to hold 1 rocket for Shuttle\s*Holmium plate 1\b/.test(pageText),
+    pageText.match(/.*rocket.*for.*\n.*/)?.[0],
+  );
+  check(
     'overview shows cargo per lap',
     /\d+ stacks\/lap/.test(pageText),
     pageText.match(/.*stacks.*/)?.[0],
