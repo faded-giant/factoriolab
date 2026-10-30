@@ -54,6 +54,14 @@ export interface ActiveBase {
 }
 
 export const OVERVIEW = '';
+
+/** What a demo tab's build starts with */
+interface DemoBuild {
+  location: string;
+  /** Item id -> items per minute */
+  objectives?: Record<string, number>;
+  excluded?: string[];
+}
 const ROCKET_PART = 'rocket-part';
 const MAX_PASSES = 8;
 
@@ -209,6 +217,128 @@ export class Base {
       tabs,
       updatedAt: Date.now(),
     });
+  }
+
+  /**
+   * Makes a base that shows the features working together: superconductors on
+   * Nauvis with holmium plate from Fulgora by shuttle, and biter eggs from
+   * Nauvis by shuttle to a barge at Aquilo, which hands them to a promethium
+   * gatherer. Returns its name.
+   */
+  createDemo(): Promise<string> {
+    let name = 'Demo';
+    for (let n = 2; this.names().includes(name); n++)
+      name = `Demo ${n.toString()}`;
+    const build = (label: string): string => `${name} – ${label}`;
+    const tabs: BaseTab[] = [
+      ...this.planets().map(
+        (p): BaseTab => ({ id: p.id, label: p.name, location: p.id }),
+      ),
+      {
+        id: 'holmium-shuttle',
+        label: 'Holmium shuttle',
+        location: SPACE_PLATFORM,
+        route: {
+          stops: [
+            { location: 'fulgora', wait: 60 },
+            { location: 'nauvis', wait: 60 },
+          ],
+          speed: 150,
+        },
+      },
+      {
+        id: 'egg-shuttle',
+        label: 'Egg shuttle',
+        location: SPACE_PLATFORM,
+        route: {
+          stops: [
+            { location: 'nauvis', wait: 30 },
+            { location: 'aquilo', wait: 30 },
+          ],
+          speed: 250,
+        },
+      },
+      {
+        id: 'barge',
+        label: 'Aquilo barge',
+        location: SPACE_PLATFORM,
+        route: { stops: [{ location: 'aquilo' }] },
+        links: { 'biter-egg': 'nauvis' },
+        via: { 'biter-egg': 'egg-shuttle' },
+      },
+      {
+        id: 'gatherer',
+        label: 'Promethium gatherer',
+        location: SPACE_PLATFORM,
+        route: {
+          stops: [
+            { location: 'aquilo', wait: 60 },
+            { location: 'shattered-planet' },
+          ],
+          speed: 300,
+        },
+        links: { 'biter-egg': 'barge' },
+      },
+    ];
+    const builds: Record<string, DemoBuild> = {
+      nauvis: {
+        location: 'nauvis',
+        objectives: { superconductor: 60 },
+        excluded: ['holmium-plate'],
+      },
+      barge: { location: SPACE_PLATFORM, excluded: ['biter-egg'] },
+      gatherer: {
+        location: SPACE_PLATFORM,
+        objectives: { 'promethium-science-pack': 10 },
+        excluded: ['biter-egg'],
+      },
+    };
+    const nauvis = tabs.find((t) => t.id === 'nauvis');
+    if (nauvis) {
+      nauvis.links = { 'holmium-plate': 'fulgora' };
+      nauvis.via = { 'holmium-plate': 'holmium-shuttle' };
+    }
+
+    return this.exclusive(async () => {
+      const modId = this.settingsStore.modId();
+      if (!modId) return;
+      for (const tab of tabs) {
+        const spec = builds[tab.id];
+        if (!spec) continue;
+        tab.build = build(tab.label ?? tab.id);
+        await this.makeBuild(modId, tab.build, name, spec);
+      }
+      this.preferencesStore.saveBase(modId, name, {
+        tabs,
+        updatedAt: Date.now(),
+      });
+    }).then(() => name);
+  }
+
+  /** Saves a new build with the given objectives and exclusions */
+  private async makeBuild(
+    modId: string,
+    name: string,
+    folder: string,
+    spec: DemoBuild,
+  ): Promise<void> {
+    const headless = this.engine();
+    await headless.load(modId, '');
+    const settled = headless.settled();
+    headless.settingsStore.apply({
+      locationIds: new Set([spec.location]),
+      excludedItemIds: new Set(spec.excluded),
+    });
+    for (const [targetId, perMinute] of Object.entries(spec.objectives ?? {}))
+      headless.objectivesStore.add({
+        targetId,
+        value: rational(BigInt(perMinute)),
+        unit: ObjectiveUnit.Items,
+        type: ObjectiveType.Output,
+      });
+    await settled;
+    this.preferencesStore.saveState(modId, name, headless.query);
+    this.preferencesStore.updateBuildMeta(modId, name, { folder });
   }
 
   open(name: string): void {

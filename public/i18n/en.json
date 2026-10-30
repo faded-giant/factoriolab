@@ -40,6 +40,8 @@
     "lapOverrideTooltip": "Leave blank to use the estimate, shown in grey. A number typed here replaces it and no longer follows the stops or speed.",
     "lapOverridden": "Using your lap time of {{ lap }} min instead of the estimate.",
     "links": "Links",
+    "loadDemo": "Load demo base",
+    "loadDemoTooltip": "Makes a base named Demo that shows planet tabs, shuttles, a barge and a promethium gatherer linked together, with silos, buffers and warnings worked out",
     "linksHeader": "Imports and exports",
     "linksHelp": "Items excluded on this tab are its imports. Pick the tab that supplies each one (you can also do this right in the production list) and that tab exports the amount needed automatically.",
     "makeBase": "Make base",

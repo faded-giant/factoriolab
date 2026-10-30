@@ -438,6 +438,38 @@ try {
     chainText.match(/.*spoils after.*/)?.[0],
   );
 
+  // 9. The demo base, made from the library with one click
+  await go(`${APP}/spa/list`, 8000);
+  check('opened the library', await click('button', 'Build library'));
+  await sleep(1000);
+  check('clicked Load demo base', await click('button', 'Load demo base'));
+  await sleep(45000);
+  const demo = JSON.parse(await evaluate(`localStorage.getItem('preferences')`))
+    .bases.spa.Demo;
+  const demoTab = (id) => demo?.tabs.find((t) => t.id === id);
+  check(
+    'demo: Fulgora exports holmium plate and rocket parts',
+    !!demoTab('fulgora')?.applied?.['holmium-plate'] &&
+      !!demoTab('fulgora')?.applied?.['rocket-part'],
+    JSON.stringify(demoTab('fulgora')?.applied),
+  );
+  check(
+    'demo: barge passes on the eggs Nauvis sends',
+    !!demoTab('barge')?.applied?.['biter-egg'] &&
+      demoTab('barge').applied['biter-egg'] ===
+        demoTab('nauvis')?.applied?.['biter-egg'],
+    JSON.stringify(demoTab('nauvis')?.applied),
+  );
+  const demoText = await evaluate('document.body.innerText');
+  for (const s of [
+    'parked at Aquilo',
+    'between Egg shuttle drops',
+    'ready for Promethium gatherer',
+    'for Holmium shuttle',
+    'spoils after 30 min',
+  ])
+    check(`demo overview shows "${s}"`, demoText.includes(s));
+
   // 7. A brand-new Space Age build starts on the legendary 4-beacon preset
   await go(`${APP}/spa/list`, 8000);
   const fresh = await evaluate('location.search');

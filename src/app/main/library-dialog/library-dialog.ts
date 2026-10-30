@@ -16,6 +16,7 @@ import {
   faLayerGroup,
   faPencil,
   faTrash,
+  faWandMagicSparkles,
   faXmark,
 } from '@fortawesome/free-solid-svg-icons';
 
@@ -84,6 +85,7 @@ export class LibraryDialog implements DialogData {
   protected readonly faLayerGroup = faLayerGroup;
   protected readonly faPencil = faPencil;
   protected readonly faTrash = faTrash;
+  protected readonly faWandMagicSparkles = faWandMagicSparkles;
   protected readonly faXmark = faXmark;
 
   save(): void {
@@ -157,6 +159,11 @@ export class LibraryDialog implements DialogData {
         group.builds.map((b) => b.name),
       );
     this.openBase(name);
+  }
+
+  /** Makes a ready-made base showing the features, and opens it */
+  async loadDemo(): Promise<void> {
+    this.openBase(await this.base.createDemo());
   }
 
   openBase(name: string): void {

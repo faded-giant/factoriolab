@@ -73,6 +73,17 @@
             (click)="newBase()"
           ></button>
         </div>
+        @if (base.hasPlatforms()) {
+          <button
+            type="button"
+            labButton
+            class="self-start"
+            [faIcon]="faWandMagicSparkles"
+            text="base.loadDemo"
+            labTooltip="base.loadDemoTooltip"
+            (click)="loadDemo()"
+          ></button>
+        }
       }
       @for (name of base.names(); track name) {
         <div
