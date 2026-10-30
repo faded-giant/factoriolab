@@ -5,7 +5,11 @@ import {
   computed,
   inject,
 } from '@angular/core';
-import { faArrowUp, faXmark } from '@fortawesome/free-solid-svg-icons';
+import {
+  faArrowUp,
+  faRotateLeft,
+  faXmark,
+} from '@fortawesome/free-solid-svg-icons';
 
 import { Base } from '~/base/base';
 import { distance, estimateLap } from '~/base/route';
@@ -24,6 +28,11 @@ interface StopRow {
   wait?: number;
   /** km to the next stop, undefined if not connected */
   next?: number;
+  nextName: string;
+  /** Whether the next stop is the first, starting the next lap */
+  last: boolean;
+  /** Last stop equal to the first, which the route returns to anyway */
+  repeatsFirst: boolean;
 }
 
 /** Edit the stops, waits and speed of the open platform tab */
@@ -44,6 +53,7 @@ export class BaseRouteDialog implements DialogData {
   readonly header = 'base.routeHeader';
 
   protected readonly faArrowUp = faArrowUp;
+  protected readonly faRotateLeft = faRotateLeft;
   protected readonly faXmark = faXmark;
 
   private readonly id = this.base.tab();
@@ -58,15 +68,19 @@ export class BaseRouteDialog implements DialogData {
   readonly stops = computed((): StopRow[] => {
     const stops = this.route().stops;
     const names = new Map(this.base.planets().map((p) => [p.id, p.name]));
-    return stops.map((s, i) => ({
-      location: s.location,
-      name: names.get(s.location) ?? s.location,
-      wait: s.wait,
-      next:
-        stops.length > 1
-          ? distance(s.location, stops[(i + 1) % stops.length].location)
-          : undefined,
-    }));
+    return stops.map((s, i) => {
+      const next = stops[(i + 1) % stops.length].location;
+      const last = i === stops.length - 1;
+      return {
+        location: s.location,
+        name: names.get(s.location) ?? s.location,
+        wait: s.wait,
+        next: distance(s.location, next),
+        nextName: names.get(next) ?? next,
+        last,
+        repeatsFirst: last && i > 0 && s.location === stops[0].location,
+      };
+    });
   });
 
   readonly addOptions = computed((): Option[] =>
@@ -115,7 +129,15 @@ export class BaseRouteDialog implements DialogData {
   }
 
   minutes(seconds: number): string {
-    return `${Number((seconds / 60).toFixed(1)).toString()} min`;
+    return `${this.minutesValue(seconds / 60)} min`;
+  }
+
+  minutesValue(minutes: number): string {
+    return Number(minutes.toFixed(1)).toString();
+  }
+
+  km(value: number): string {
+    return `${value.toLocaleString()} km`;
   }
 
   private setStops(stops: RouteStop[]): void {

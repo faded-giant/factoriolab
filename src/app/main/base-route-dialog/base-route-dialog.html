@@ -1,52 +1,71 @@
 <p class="text-sm text-gray-300">{{ 'base.routeHelp' | translate }}</p>
 
 <div class="gap-1 flex flex-col">
-  <span class="mx-1 text-sm text-gray-300">{{ 'base.stops' | translate }}</span>
-  @for (stop of stops(); track $index; let i = $index) {
-    <div class="gap-2 flex items-center">
-      <lab-icon [value]="stop.location" type="location"></lab-icon>
-      <span class="grow">{{ stop.name }}</span>
-      <input
-        type="number"
-        min="0"
-        class="input w-24"
-        [value]="stop.wait ?? ''"
-        [placeholder]="'base.waitSeconds' | translate"
-        [attr.aria-label]="'base.waitSeconds' | translate"
-        (change)="setWait(i, $any($event.target).value)"
-      />
-      <span class="w-24 text-sm text-gray-400">
-        @if (stops().length > 1) {
-          @if (stop.next != null) {
-            → {{ stop.next / 1000 }}k km
-          } @else {
-            {{ 'base.notConnected' | translate }}
+  @if (stops().length) {
+    <div
+      class="gap-x-2 gap-y-1 grid grid-cols-[1.5rem_minmax(0,8rem)_6rem_minmax(0,1fr)_auto_auto] items-center"
+    >
+      <span></span>
+      <span class="text-sm text-gray-300">{{ 'base.stop' | translate }}</span>
+      <span class="text-sm text-gray-300">{{
+        'base.waitSeconds' | translate
+      }}</span>
+      <span class="text-sm text-gray-300">{{
+        'base.nextLeg' | translate
+      }}</span>
+      <span></span>
+      <span></span>
+      @for (stop of stops(); track $index; let i = $index) {
+        <lab-icon [value]="stop.location" type="location"></lab-icon>
+        <span class="truncate">{{ stop.name }}</span>
+        <input
+          type="number"
+          min="0"
+          class="input"
+          [value]="stop.wait ?? ''"
+          placeholder="0"
+          [attr.aria-label]="'base.waitSeconds' | translate"
+          (change)="setWait(i, $any($event.target).value)"
+        />
+        <span class="text-sm text-gray-400">
+          @if (stop.repeatsFirst) {
+            <span class="text-complement-400">{{
+              'base.repeatsFirst' | translate
+            }}</span>
+          } @else if (stops().length > 1) {
+            @if (stop.next != null) {
+              → {{ stop.last ? ('base.backTo' | translate) + ' ' : ''
+              }}{{ stop.nextName }} · {{ km(stop.next) }}
+            } @else {
+              → {{ stop.nextName }}:
+              {{ 'base.notConnected' | translate }}
+            }
           }
-        }
-      </span>
-      <button
-        type="button"
-        labButton
-        size="small"
-        [border]="false"
-        [faIcon]="faArrowUp"
-        labTooltip="base.moveUp"
-        [attr.aria-label]="'base.moveUp' | translate"
-        [disabled]="i === 0"
-        (click)="moveUp(i)"
-      ></button>
-      <button
-        type="button"
-        labButton
-        size="small"
-        [border]="false"
-        [faIcon]="faXmark"
-        labTooltip="base.removeStop"
-        [attr.aria-label]="'base.removeStop' | translate"
-        (click)="removeStop(i)"
-      ></button>
+        </span>
+        <button
+          type="button"
+          labButton
+          size="small"
+          [border]="false"
+          [faIcon]="faArrowUp"
+          labTooltip="base.moveUp"
+          [attr.aria-label]="'base.moveUp' | translate"
+          [disabled]="i === 0"
+          (click)="moveUp(i)"
+        ></button>
+        <button
+          type="button"
+          labButton
+          size="small"
+          [border]="false"
+          [faIcon]="faXmark"
+          labTooltip="base.removeStop"
+          [attr.aria-label]="'base.removeStop' | translate"
+          (click)="removeStop(i)"
+        ></button>
+      }
     </div>
-  } @empty {
+  } @else {
     <span class="mx-1 text-sm text-gray-400">{{
       'base.noStops' | translate
     }}</span>
@@ -67,7 +86,7 @@
     <input
       type="number"
       min="0"
-      class="input w-24"
+      class="input w-24 grow-0"
       [value]="route().speed ?? ''"
       placeholder="km/s"
       (change)="setSpeed($any($event.target).value)"
@@ -78,12 +97,23 @@
     <input
       type="number"
       min="0"
-      class="input w-24"
+      class="input w-24 grow-0"
       [value]="route().lap ?? ''"
-      placeholder="min"
+      [placeholder]="estimate() ? minutesValue(estimate()!.minutes) : 'min'"
+      labTooltip="base.lapOverrideTooltip"
       (change)="setLap($any($event.target).value)"
     />
   </label>
+  @if (route().lap) {
+    <button
+      type="button"
+      labButton
+      size="small"
+      [faIcon]="faRotateLeft"
+      text="base.useEstimate"
+      (click)="setLap('')"
+    ></button>
+  }
 </div>
 
 <div class="mx-1 text-sm">
