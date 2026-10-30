@@ -23,7 +23,11 @@ import { ObjectiveState } from '~/state/objectives/objective';
 import { ObjectiveType } from '~/state/objectives/objective-type';
 import { ObjectiveUnit } from '~/state/objectives/objective-unit';
 import { ObjectivesStore } from '~/state/objectives/objectives-store';
-import { BaseState, BaseTab } from '~/state/preferences/base-state';
+import {
+  BaseState,
+  BaseTab,
+  PlatformRoute,
+} from '~/state/preferences/base-state';
 import { PreferencesStore } from '~/state/preferences/preferences-store';
 import { RouterSync } from '~/state/router/router-sync';
 import { SettingsStore } from '~/state/settings/settings-store';
@@ -139,6 +143,11 @@ export class Base {
       .filter((id) => id !== SPACE_PLATFORM)
       .map((id) => ({ id, name: data.locationRecord[id]?.name ?? id }));
   });
+
+  /** Platform tabs, which can carry imports between planets */
+  readonly platforms = computed(
+    () => this.state()?.tabs.filter((t) => t.location === SPACE_PLATFORM) ?? [],
+  );
 
   readonly hasPlatforms = computed(() =>
     this.settingsStore.dataset().locationIds.includes(SPACE_PLATFORM),
@@ -280,6 +289,9 @@ export class Base {
           links: Object.fromEntries(
             Object.entries(t.links ?? {}).filter(([, src]) => src !== id),
           ),
+          via: Object.fromEntries(
+            Object.entries(t.via ?? {}).filter(([, v]) => v !== id),
+          ),
         })),
     }));
     if (this.tab() === id) this.tab.set(OVERVIEW);
@@ -304,10 +316,62 @@ export class Base {
 
   /** Sets which tab supplies an item imported by tab `id`; null unlinks */
   setLink(id: string, itemId: string, source: string | null): void {
-    const links = { ...this.findTab(id)?.links };
+    const tab = this.findTab(id);
+    const links = { ...tab?.links };
+    const via = { ...tab?.via };
     if (source) links[itemId] = source;
-    else delete links[itemId];
-    this.updateTab(id, { links });
+    else {
+      delete links[itemId];
+      delete via[itemId];
+    }
+    this.updateTab(id, { links, via });
+  }
+
+  /**
+   * Whether tab `id` can pick a platform to carry its import of an item: it
+   * comes from a planet, to somewhere that is not itself a platform
+   */
+  canShipVia(id: string, itemId: string): boolean {
+    const tab = this.findTab(id);
+    const source = this.findTab(tab?.links?.[itemId] ?? '');
+    return (
+      !!tab &&
+      !!source?.location &&
+      tab.location !== SPACE_PLATFORM &&
+      source.location !== SPACE_PLATFORM &&
+      this.platforms().length > 0
+    );
+  }
+
+  /** Choices for which platform carries an import */
+  viaOptions(): Option[] {
+    return [
+      { label: 'base.direct', value: '' },
+      ...this.platforms().map(
+        (t): Option => ({
+          label: tabLabel(t),
+          value: t.id,
+          icon: t.location,
+          iconType: 'location',
+        }),
+      ),
+    ];
+  }
+
+  /** Sets the platform that carries an import of tab `id`; null clears it */
+  setVia(id: string, itemId: string, platform: string | null): void {
+    const via = { ...this.findTab(id)?.via };
+    if (platform) via[itemId] = platform;
+    else delete via[itemId];
+    this.updateTab(id, { via });
+  }
+
+  setRoute(id: string, route: PlatformRoute): void {
+    this.updateTab(id, { route });
+  }
+
+  setSecondRocket(value: boolean): void {
+    this.update((s) => ({ ...s, secondRocket: value || undefined }));
   }
 
   /** Opens a tab, creating its build first if it is a new planet tab */
@@ -501,7 +565,13 @@ export class Base {
     );
     const totals = solver.objectivesStore.totals();
     const power: Rational = totals.power ?? rational.zero;
-    const summary = summarize(totals.machines, power);
+    const data = solver.settingsStore.dataset();
+    const siloIds = new Set(
+      Object.keys(totals.machines).filter(
+        (m) => data.machineRecord[m]?.silo != null,
+      ),
+    );
+    const summary = summarize(totals.machines, power, siloIds);
 
     if (
       JSON.stringify(state.imports?.[id] ?? {}) === JSON.stringify(imports) &&

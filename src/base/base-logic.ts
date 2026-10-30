@@ -201,14 +201,25 @@ export function importsFrom(
   return result;
 }
 
+/** Totals for the overview; `siloIds` are the machines that are silos */
 export function summarize(
   machines: Record<string, TotalValue>,
   power: Rational,
+  siloIds = new Set<string>(),
 ): TabSummary {
   let buildings = rational.zero;
-  for (const total of Object.values(machines))
-    if (total.tooltipType === 'machine') buildings = buildings.add(total.total);
-  return { buildings: buildings.toString(), power: power.toString() };
+  let silos = rational.zero;
+  for (const [id, total] of Object.entries(machines)) {
+    if (total.tooltipType !== 'machine') continue;
+    buildings = buildings.add(total.total);
+    if (siloIds.has(id)) silos = silos.add(total.total);
+  }
+  const summary: TabSummary = {
+    buildings: buildings.toString(),
+    power: power.toString(),
+  };
+  if (silos.nonzero()) summary.silos = silos.toString();
+  return summary;
 }
 
 /** Points tabs backed by a renamed build at its new name */

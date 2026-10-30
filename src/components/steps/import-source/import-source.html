@@ -6,4 +6,13 @@
     placeholder="base.importFrom"
     (valueChange)="setSource($event)"
   ></lab-select>
+  @if (showVia()) {
+    <lab-select
+      class="ms-1 w-36"
+      [options]="viaOptions()"
+      [value]="via()"
+      placeholder="base.via"
+      (valueChange)="setVia($event)"
+    ></lab-select>
+  }
 }

@@ -123,9 +123,12 @@ try {
     const prefs = JSON.parse(localStorage.getItem('preferences') ?? '{}');
     prefs.states = { ...prefs.states, spa: { 'T – Nauvis': ${JSON.stringify(nauvisQuery)} } };
     prefs.bases = { spa: { T: { tabs: [
-      { id: 'nauvis', label: 'Nauvis', location: 'nauvis', build: 'T – Nauvis', links: { 'holmium-plate': 'fulgora' } },
+      { id: 'nauvis', label: 'Nauvis', location: 'nauvis', build: 'T – Nauvis', links: { 'holmium-plate': 'fulgora' }, via: { 'holmium-plate': 'p1' } },
       { id: 'fulgora', label: 'Fulgora', location: 'fulgora' },
       { id: 'gleba', label: 'Gleba', location: 'gleba' },
+      { id: 'p1', label: 'Shuttle', location: 'space-platform', route: {
+        stops: [{ location: 'fulgora', wait: 60 }, { location: 'nauvis', wait: 60 }],
+        speed: 100 } },
     ] } } };
     localStorage.setItem('preferences', JSON.stringify(prefs));
     localStorage.setItem('base', JSON.stringify({ modId: 'spa', name: 'T' }));
@@ -172,6 +175,20 @@ try {
     'no background error shown',
     !pageText.includes('Background update failed'),
   );
+  // Shuttle: 2 x 15000 km at 100 km/s plus 2 x 60 s waiting = 7 min. Fulgora
+  // holds 0.02 rockets/min x 7 min of holmium plate, rounded up to 1 rocket
+  check('overview shows the shuttle lap', pageText.includes('7 min'));
+  check(
+    'overview shows the silo buffer for the shuttle',
+    pageText.includes('to hold 1 rocket for Shuttle'),
+    pageText.match(/.*rocket.*for.*/)?.[0],
+  );
+  check(
+    'overview shows cargo per lap',
+    /\d+ stacks\/lap/.test(pageText),
+    pageText.match(/.*stacks.*/)?.[0],
+  );
+  check('no route warning', !pageText.includes('does not stop there'));
 
   // 4. Open the Fulgora build: holmium plate objective, Fulgora-only recipes
   if (fulgoraTab?.build) {
@@ -318,6 +335,27 @@ try {
     'platform deleted',
     !(await savedBase()).tabs.some((t) => t.id === ship?.id),
   );
+
+  // The route dialog shows the shuttle's estimated lap
+  check(
+    'opened the shuttle tab',
+    await click('lab-base-bar button', 'Shuttle'),
+  );
+  await sleep(6000);
+  check('clicked Route', await click('lab-base-bar button', 'Route'));
+  await sleep(1000);
+  const dialogText = await evaluate(
+    `document.querySelector('lab-base-route-dialog')?.innerText ?? ''`,
+  );
+  check(
+    'route dialog estimates the lap',
+    dialogText.includes('Estimated lap: 7 min (5 min flying, 2 min waiting)'),
+    dialogText.match(/Estimated.*/)?.[0],
+  );
+  await evaluate(
+    `document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`,
+  );
+  await sleep(500);
 
   // 7. A brand-new Space Age build starts on the legendary 4-beacon preset
   await go(`${APP}/spa/list`, 8000);

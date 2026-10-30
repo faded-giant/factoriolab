@@ -15,6 +15,15 @@
         [value]="row.source"
         (valueChange)="setSource(row.itemId, $event)"
       ></lab-select>
+      @if (row.canShipVia) {
+        <lab-select
+          class="w-40"
+          [options]="viaOptions()"
+          [value]="row.via"
+          placeholder="base.via"
+          (valueChange)="setVia(row.itemId, $event)"
+        ></lab-select>
+      }
     </div>
   } @empty {
     <span class="mx-1 text-sm text-gray-400">{{

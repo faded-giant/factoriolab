@@ -1,0 +1,108 @@
+<p class="text-sm text-gray-300">{{ 'base.routeHelp' | translate }}</p>
+
+<div class="gap-1 flex flex-col">
+  <span class="mx-1 text-sm text-gray-300">{{ 'base.stops' | translate }}</span>
+  @for (stop of stops(); track $index; let i = $index) {
+    <div class="gap-2 flex items-center">
+      <lab-icon [value]="stop.location" type="location"></lab-icon>
+      <span class="grow">{{ stop.name }}</span>
+      <input
+        type="number"
+        min="0"
+        class="input w-24"
+        [value]="stop.wait ?? ''"
+        [placeholder]="'base.waitSeconds' | translate"
+        [attr.aria-label]="'base.waitSeconds' | translate"
+        (change)="setWait(i, $any($event.target).value)"
+      />
+      <span class="w-24 text-sm text-gray-400">
+        @if (stops().length > 1) {
+          @if (stop.next != null) {
+            → {{ stop.next / 1000 }}k km
+          } @else {
+            {{ 'base.notConnected' | translate }}
+          }
+        }
+      </span>
+      <button
+        type="button"
+        labButton
+        size="small"
+        [border]="false"
+        [faIcon]="faArrowUp"
+        labTooltip="base.moveUp"
+        [attr.aria-label]="'base.moveUp' | translate"
+        [disabled]="i === 0"
+        (click)="moveUp(i)"
+      ></button>
+      <button
+        type="button"
+        labButton
+        size="small"
+        [border]="false"
+        [faIcon]="faXmark"
+        labTooltip="base.removeStop"
+        [attr.aria-label]="'base.removeStop' | translate"
+        (click)="removeStop(i)"
+      ></button>
+    </div>
+  } @empty {
+    <span class="mx-1 text-sm text-gray-400">{{
+      'base.noStops' | translate
+    }}</span>
+  }
+  @for (key of [addKey()]; track key) {
+    <lab-select
+      class="w-48"
+      placeholder="base.addStop"
+      [options]="addOptions()"
+      (valueChange)="addStop($event)"
+    ></lab-select>
+  }
+</div>
+
+<div class="gap-2 flex flex-wrap items-center">
+  <label class="gap-2 text-sm flex items-center text-gray-300">
+    {{ 'base.speed' | translate }}
+    <input
+      type="number"
+      min="0"
+      class="input w-24"
+      [value]="route().speed ?? ''"
+      placeholder="km/s"
+      (change)="setSpeed($any($event.target).value)"
+    />
+  </label>
+  <label class="gap-2 text-sm flex items-center text-gray-300">
+    {{ 'base.lapOverride' | translate }}
+    <input
+      type="number"
+      min="0"
+      class="input w-24"
+      [value]="route().lap ?? ''"
+      placeholder="min"
+      (change)="setLap($any($event.target).value)"
+    />
+  </label>
+</div>
+
+<div class="mx-1 text-sm">
+  @if (estimate(); as e) {
+    {{
+      'base.lapEstimate'
+        | translate
+          : {
+              total: minutes(e.travel + e.wait),
+              travel: minutes(e.travel),
+              wait: minutes(e.wait),
+            }
+    }}
+  } @else {
+    <span class="text-gray-400">{{ 'base.lapNeeds' | translate }}</span>
+  }
+  @if (route().lap) {
+    <div class="text-complement-400">
+      {{ 'base.lapOverridden' | translate: { lap: route().lap } }}
+    </div>
+  }
+</div>

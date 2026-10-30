@@ -21,6 +21,8 @@ interface ImportRow {
   name: string;
   rate: string;
   source: string;
+  via: string;
+  canShipVia: boolean;
 }
 
 /** Choose which tab supplies each item the open tab imports */
@@ -56,6 +58,8 @@ export class BaseLinksDialog implements DialogData {
       name: this.itemName(itemId),
       rate: perMinute(i.rate),
       source: tab.links?.[itemId] ?? '',
+      via: tab.via?.[itemId] ?? '',
+      canShipVia: this.base.canShipVia(tab.id, itemId),
     }));
   });
 
@@ -75,8 +79,14 @@ export class BaseLinksDialog implements DialogData {
     this.base.sourceOptions(this.base.tab()),
   );
 
+  readonly viaOptions = computed(() => this.base.viaOptions());
+
   setSource(itemId: string, source: string | undefined): void {
     this.base.setLink(this.base.tab(), itemId, source || null);
+  }
+
+  setVia(itemId: string, platform: string | undefined): void {
+    this.base.setVia(this.base.tab(), itemId, platform || null);
   }
 
   private itemName(id: string): string {

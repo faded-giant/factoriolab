@@ -434,6 +434,17 @@ export class SyncStore {
             location: t.location,
             build: t.build,
             links: sorted(t.links),
+            via: sorted(t.via),
+            route: t.route
+              ? {
+                  stops: t.route.stops.map((s) => ({
+                    location: s.location,
+                    wait: s.wait,
+                  })),
+                  speed: t.route.speed,
+                  lap: t.route.lap,
+                }
+              : undefined,
             applied: sorted(t.applied),
           })),
           imports: imports
@@ -442,6 +453,7 @@ export class SyncStore {
               )
             : undefined,
           summaries: sorted(b.summaries),
+          secondRocket: b.secondRocket,
           updatedAt: b.updatedAt,
         };
         files[basePath(modId, name)] = toJson(file);

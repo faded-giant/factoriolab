@@ -44,7 +44,25 @@ export class ImportSource {
       ] ?? '',
   );
 
+  protected readonly showVia = computed(
+    () =>
+      !!this.source() && this.base.canShipVia(this.base.tab(), this.itemId()),
+  );
+
+  protected readonly viaOptions = computed(() => this.base.viaOptions());
+
+  protected readonly via = computed(
+    () =>
+      this.base.state()?.tabs.find((t) => t.id === this.base.tab())?.via?.[
+        this.itemId()
+      ] ?? '',
+  );
+
   setSource(source: string | undefined): void {
     this.base.setLink(this.base.tab(), this.itemId(), source || null);
+  }
+
+  setVia(platform: string | undefined): void {
+    this.base.setVia(this.base.tab(), this.itemId(), platform || null);
   }
 }

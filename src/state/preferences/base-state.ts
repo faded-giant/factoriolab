@@ -1,3 +1,21 @@
+/** A stop on a platform's route */
+export interface RouteStop {
+  /** Location id, e.g. 'fulgora' */
+  location: string;
+  /** Seconds spent in orbit before leaving */
+  wait?: number;
+}
+
+/** Where a platform flies, to estimate how long a lap takes */
+export interface PlatformRoute {
+  /** In order; the platform returns to the first after the last */
+  stops: RouteStop[];
+  /** Cruise speed in km/s, as shown on the platform hub */
+  speed?: number;
+  /** Minutes per lap, used instead of the estimate */
+  lap?: number;
+}
+
 /** One planet (or platform) of a base, backed by a saved build */
 export interface BaseTab {
   /** Stable key used by links, imports and summaries */
@@ -10,6 +28,10 @@ export interface BaseTab {
   build?: string;
   /** Imported item id -> id of the tab that supplies it */
   links?: Record<string, string>;
+  /** Imported item id -> id of the platform tab that carries it */
+  via?: Record<string, string>;
+  /** For platform tabs */
+  route?: PlatformRoute;
   /**
    * Export amounts (item id -> items per second) last written into this tab's
    * objectives, used to find and update those objectives later
@@ -29,6 +51,8 @@ export interface TabSummary {
   buildings: string;
   /** kW */
   power: string;
+  /** Rocket silos the build needs to keep up, if any */
+  silos?: string;
 }
 
 /** Several builds linked by shipments, e.g. one tab per planet */
@@ -38,5 +62,10 @@ export interface BaseState {
   imports?: Record<string, Record<string, TabImport>>;
   /** Tab id -> totals from its last solve */
   summaries?: Record<string, TabSummary>;
+  /**
+   * Whether each silo counts for two rockets when a platform arrives: the one
+   * waiting, and the next one whose parts are already made
+   */
+  secondRocket?: boolean;
   updatedAt?: number;
 }

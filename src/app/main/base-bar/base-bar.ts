@@ -9,11 +9,13 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import {
   faExclamationTriangle,
   faLink,
   faPencil,
   faPlus,
+  faRoute,
   faTrash,
   faXmark,
 } from '@fortawesome/free-solid-svg-icons';
@@ -24,9 +26,12 @@ import {
   exportsFor,
   launchesFor,
   perMinute,
+  SPACE_PLATFORM,
   tabLabel,
 } from '~/base/base-logic';
+import { carriedBy, lapMinutes, routeWarnings, siloPlan } from '~/base/route';
 import { Button } from '~/components/button/button';
+import { Checkbox } from '~/components/checkbox/checkbox';
 import { Confirm } from '~/components/confirm/confirm';
 import { Icon } from '~/components/icon/icon';
 import { Select } from '~/components/select/select';
@@ -34,10 +39,12 @@ import { Tooltip } from '~/components/tooltip/tooltip';
 import { Library } from '~/library/library';
 import { Option } from '~/option/option';
 import { rational } from '~/rational/rational';
+import { BaseState } from '~/state/preferences/base-state';
 import { SettingsStore } from '~/state/settings/settings-store';
 import { TranslatePipe } from '~/translate/translate-pipe';
 
 import { BaseLinksDialog } from '../base-links-dialog/base-links-dialog';
+import { BaseRouteDialog } from '../base-route-dialog/base-route-dialog';
 
 interface OverviewItem {
   itemId: string;
@@ -58,11 +65,24 @@ interface OverviewRow {
   imports: OverviewItem[];
   exports: OverviewItem[];
   rockets?: string;
+  /** Silos to build, with how that number was reached */
+  silos?: { total: number; lines: string[] };
+  /** For platforms */
+  lap?: string;
+  cargo?: string;
 }
 
 @Component({
   selector: 'lab-base-bar',
-  imports: [Button, Icon, Select, Tooltip, TranslatePipe],
+  imports: [
+    Button,
+    Checkbox,
+    FormsModule,
+    Icon,
+    Select,
+    Tooltip,
+    TranslatePipe,
+  ],
   templateUrl: './base-bar.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block border-b border-gray-600' },
@@ -76,9 +96,18 @@ export class BaseBar {
 
   protected readonly OVERVIEW = OVERVIEW;
   protected readonly BaseLinksDialog = BaseLinksDialog;
+  protected readonly BaseRouteDialog = BaseRouteDialog;
+
+  /** Whether the open tab is a platform, which has a route */
+  protected readonly onPlatform = computed(
+    () =>
+      this.base.platforms().some((t) => t.id === this.base.tab()) &&
+      !this.base.busy(),
+  );
   protected readonly faLink = faLink;
   protected readonly faPencil = faPencil;
   protected readonly faPlus = faPlus;
+  protected readonly faRoute = faRoute;
   protected readonly faTrash = faTrash;
   protected readonly faXmark = faXmark;
   protected readonly tabLabel = tabLabel;
@@ -183,6 +212,8 @@ export class BaseBar {
         rockets: rockets.nonzero()
           ? `${Number(rockets.toNumber().toFixed(2))}/min`
           : undefined,
+        silos: this.silos(state, tab.id, labels),
+        ...this.lapAndCargo(state, tab.id),
       };
     });
   });
@@ -209,8 +240,57 @@ export class BaseBar {
             `${tabLabel(tab)}: ${this.itemName(id)} is imported but not linked to a tab`,
           );
 
+    for (const w of routeWarnings(state))
+      warnings.push(
+        `${label(w.platform)}: carries items for ${this.locationName(w.location)} but its route does not stop there`,
+      );
+
     return warnings;
   });
+
+  private silos(
+    state: BaseState,
+    id: string,
+    labels: Map<string, string>,
+  ): OverviewRow['silos'] {
+    const plan = siloPlan(state, id);
+    if (!plan) return undefined;
+    const lines: string[] = [];
+    if (plan.production) lines.push(`${plan.production.toString()} to keep up`);
+    for (const b of plan.buffers)
+      lines.push(
+        `${b.silos.toString()} to hold ${b.rockets.toString()} rocket${b.rockets === 1 ? '' : 's'} for ${labels.get(b.platform) ?? b.platform}`,
+      );
+    for (const p of plan.unknown)
+      lines.push(`${labels.get(p) ?? p}: no lap time yet`);
+    return { total: plan.total, lines };
+  }
+
+  private lapAndCargo(
+    state: BaseState,
+    id: string,
+  ): Pick<OverviewRow, 'lap' | 'cargo'> {
+    const tab = state.tabs.find((t) => t.id === id);
+    if (tab?.location !== SPACE_PLATFORM) return {};
+    const lap = lapMinutes(tab.route);
+    if (lap == null) return {};
+    const items = this.settingsStore.dataset().itemRecord;
+    let stacks = 0;
+    for (const s of carriedBy(state, id)) {
+      const stack = items[s.itemId]?.stack?.toNumber();
+      if (stack) stacks += (s.rate * lap * 60) / stack;
+    }
+    return {
+      lap: `${Number(lap.toFixed(1)).toString()} min`,
+      cargo: stacks
+        ? `${Math.ceil(stacks - 1e-9).toString()} stacks/lap`
+        : undefined,
+    };
+  }
+
+  private locationName(id: string): string {
+    return this.settingsStore.dataset().locationRecord[id]?.name ?? id;
+  }
 
   private itemName(id: string): string {
     return this.settingsStore.dataset().itemRecord[id]?.name ?? id;
