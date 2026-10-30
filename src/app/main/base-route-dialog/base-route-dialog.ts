@@ -12,7 +12,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 
 import { Base } from '~/base/base';
-import { distance, estimateLap } from '~/base/route';
+import { distance, estimateLap, SPACE_LOCATIONS } from '~/base/route';
 import { Button } from '~/components/button/button';
 import { DialogData } from '~/components/dialog/dialog';
 import { Icon } from '~/components/icon/icon';
@@ -25,6 +25,8 @@ import { TranslatePipe } from '~/translate/translate-pipe';
 interface StopRow {
   location: string;
   name: string;
+  /** Whether the location has an icon */
+  icon: boolean;
   wait?: number;
   /** km to the next stop, undefined if not connected */
   next?: number;
@@ -67,13 +69,14 @@ export class BaseRouteDialog implements DialogData {
 
   readonly stops = computed((): StopRow[] => {
     const stops = this.route().stops;
-    const names = new Map(this.base.planets().map((p) => [p.id, p.name]));
+    const names = this.names();
     return stops.map((s, i) => {
       const next = stops[(i + 1) % stops.length].location;
       const last = i === stops.length - 1;
       return {
         location: s.location,
         name: names.get(s.location) ?? s.location,
+        icon: !(s.location in SPACE_LOCATIONS),
         wait: s.wait,
         next: distance(s.location, next),
         nextName: names.get(next) ?? next,
@@ -83,14 +86,30 @@ export class BaseRouteDialog implements DialogData {
     });
   });
 
-  readonly addOptions = computed((): Option[] =>
-    this.base.planets().map((p) => ({
-      label: p.name,
-      value: p.id,
-      icon: p.id,
-      iconType: 'location',
-    })),
+  private readonly names = computed(
+    () =>
+      new Map([
+        ...this.base.planets().map((p): [string, string] => [p.id, p.name]),
+        ...Object.entries(SPACE_LOCATIONS),
+      ]),
   );
+
+  readonly addOptions = computed((): Option[] => [
+    ...this.base.planets().map(
+      (p): Option => ({
+        label: p.name,
+        value: p.id,
+        icon: p.id,
+        iconType: 'location',
+      }),
+    ),
+    ...Object.entries(SPACE_LOCATIONS).map(
+      ([value, label]): Option => ({ label, value }),
+    ),
+  ]);
+
+  /** One stop: the platform stays there, like a barge */
+  readonly parked = computed(() => this.route().stops.length === 1);
 
   /** Changes after each pick, so the add select resets */
   protected readonly addKey = computed(() => this.route().stops.length);

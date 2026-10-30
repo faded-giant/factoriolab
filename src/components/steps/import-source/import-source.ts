@@ -49,7 +49,9 @@ export class ImportSource {
       !!this.source() && this.base.canShipVia(this.base.tab(), this.itemId()),
   );
 
-  protected readonly viaOptions = computed(() => this.base.viaOptions());
+  protected readonly viaOptions = computed(() =>
+    this.base.viaOptions(this.base.tab(), this.itemId()),
+  );
 
   protected readonly via = computed(
     () =>

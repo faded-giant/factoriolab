@@ -16,7 +16,11 @@
       <span></span>
       <span></span>
       @for (stop of stops(); track $index; let i = $index) {
-        <lab-icon [value]="stop.location" type="location"></lab-icon>
+        @if (stop.icon) {
+          <lab-icon [value]="stop.location" type="location"></lab-icon>
+        } @else {
+          <span></span>
+        }
         <span class="truncate">{{ stop.name }}</span>
         <input
           type="number"
@@ -117,7 +121,9 @@
 </div>
 
 <div class="mx-1 text-sm">
-  @if (estimate(); as e) {
+  @if (parked()) {
+    {{ 'base.parked' | translate: { name: stops()[0].name } }}
+  } @else if (estimate(); as e) {
     {{
       'base.lapEstimate'
         | translate

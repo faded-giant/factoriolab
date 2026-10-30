@@ -357,6 +357,87 @@ try {
   );
   await sleep(500);
 
+  // 8. Platform chain: an egg shuttle brings biter eggs from Nauvis to a
+  // barge parked at Aquilo, which hands them to the promethium gatherer
+  await go(`${APP}/spa/list?o=promethium-science-pack*10&v=12`, 8000);
+  const eggExcluded = await evaluate(`(() => {
+    const label = [...document.querySelectorAll('span[aria-hidden="true"]')]
+      .find((s) => s.textContent.trim() === 'Biter egg');
+    const button = label?.parentElement?.querySelector('lab-exclude-button button');
+    button?.click();
+    return !!button;
+  })()`);
+  check('excluded biter eggs on the gatherer', eggExcluded);
+  await sleep(2000);
+  const gathererQuery = await evaluate('location.search.substring(1)');
+  const iex = /iex=[^&]+/.exec(gathererQuery)?.[0];
+  check('gatherer build has the exclusion', !!iex, gathererQuery);
+  await evaluate(`(() => {
+    const prefs = JSON.parse(localStorage.getItem('preferences'));
+    prefs.states.spa['C – Gatherer'] = ${JSON.stringify(gathererQuery)};
+    prefs.states.spa['C – Barge'] = ${JSON.stringify(`${iex}&v=12`)};
+    prefs.bases.spa.C = { tabs: [
+      { id: 'nauvis', label: 'Nauvis', location: 'nauvis' },
+      { id: 'shuttle', label: 'Egg shuttle', location: 'space-platform', route: {
+        stops: [{ location: 'nauvis', wait: 60 }, { location: 'aquilo', wait: 60 }], speed: 200 } },
+      { id: 'barge', label: 'Barge', location: 'space-platform', build: 'C – Barge',
+        route: { stops: [{ location: 'aquilo' }] },
+        links: { 'biter-egg': 'nauvis' }, via: { 'biter-egg': 'shuttle' } },
+      { id: 'gatherer', label: 'Gatherer', location: 'space-platform', build: 'C – Gatherer',
+        route: { stops: [{ location: 'aquilo', wait: 60 }, { location: 'shattered-planet' }], lap: 20 },
+        links: { 'biter-egg': 'barge' } },
+    ] };
+    localStorage.setItem('preferences', JSON.stringify(prefs));
+    localStorage.setItem('base', JSON.stringify({ modId: 'spa', name: 'C' }));
+  })()`);
+  await go(`${APP}/spa/list?o=iron-gear-wheel*10&v=12`, 25000);
+  const chain = JSON.parse(
+    await evaluate(`localStorage.getItem('preferences')`),
+  ).bases.spa.C;
+  const eggs = chain.imports?.gatherer?.['biter-egg']?.rate;
+  const tabOf = (id) => chain.tabs.find((t) => t.id === id);
+  check('gatherer imports biter eggs', !!eggs, eggs);
+  check(
+    'barge passes the eggs on: exports what the gatherer takes',
+    tabOf('barge').applied?.['biter-egg'] === eggs,
+    JSON.stringify(tabOf('barge').applied),
+  );
+  check(
+    'barge imports exactly that from Nauvis',
+    chain.imports?.barge?.['biter-egg']?.rate === eggs,
+    JSON.stringify(chain.imports?.barge),
+  );
+  check(
+    'Nauvis makes the eggs, plus rocket parts to launch them',
+    tabOf('nauvis').applied?.['biter-egg'] === eggs &&
+      !!tabOf('nauvis').applied?.['rocket-part'],
+    JSON.stringify(tabOf('nauvis').applied),
+  );
+  const chainText = await evaluate('document.body.innerText');
+  check(
+    'barge holds eggs between shuttle drops',
+    chainText.includes('between Egg shuttle drops'),
+  );
+  check(
+    'barge holds eggs ready for the gatherer',
+    chainText.includes('ready for Gatherer'),
+  );
+  check('relay is not flagged', !chainText.includes('so it would import it'));
+  check(
+    'no route warnings',
+    !chainText.includes('does not stop there') &&
+      !chainText.includes('which also moves'),
+  );
+  // Shuttle lap 9.5 min, gatherer lap 20 min: up to 2 x 9.5 + 4.75 + 2 x 20
+  // = 63.75 min, past the 30 min eggs last
+  check(
+    'warns that eggs spoil',
+    chainText.includes(
+      'Biter egg can be up to 64 min old when used, but spoils after 30 min',
+    ),
+    chainText.match(/.*spoils after.*/)?.[0],
+  );
+
   // 7. A brand-new Space Age build starts on the legendary 4-beacon preset
   await go(`${APP}/spa/list`, 8000);
   const fresh = await evaluate('location.search');

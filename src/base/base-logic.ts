@@ -254,10 +254,11 @@ export function baseWarnings(base: BaseState): BaseWarning[] {
       if (!ids.has(source))
         warnings.push({ tab: tab.id, itemId, kind: 'missingSource', source });
 
-    // A tab asked to export an item it has excluded just imports it again
+    // A tab asked to export an item it has excluded just imports it again,
+    // unless it is linked to a supplier, passing the item on (a relay)
     const exports = exportsFor(base, tab.id);
     for (const itemId of Object.keys(exports))
-      if (base.imports?.[tab.id]?.[itemId])
+      if (base.imports?.[tab.id]?.[itemId] && !tab.links?.[itemId])
         warnings.push({ tab: tab.id, itemId, kind: 'importsOwnExport' });
   }
   return warnings;

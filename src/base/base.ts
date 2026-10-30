@@ -327,27 +327,24 @@ export class Base {
     this.updateTab(id, { links, via });
   }
 
-  /**
-   * Whether tab `id` can pick a platform to carry its import of an item: it
-   * comes from a planet, to somewhere that is not itself a platform
-   */
-  canShipVia(id: string, itemId: string): boolean {
+  /** Platforms that could carry tab `id`'s import of an item */
+  private carriers(id: string, itemId: string): BaseTab[] {
     const tab = this.findTab(id);
-    const source = this.findTab(tab?.links?.[itemId] ?? '');
-    return (
-      !!tab &&
-      !!source?.location &&
-      tab.location !== SPACE_PLATFORM &&
-      source.location !== SPACE_PLATFORM &&
-      this.platforms().length > 0
-    );
+    const source = tab?.links?.[itemId];
+    if (!tab || !source) return [];
+    return this.platforms().filter((p) => p.id !== id && p.id !== source);
+  }
+
+  /** Whether some platform other than both ends could carry an import */
+  canShipVia(id: string, itemId: string): boolean {
+    return this.carriers(id, itemId).length > 0;
   }
 
   /** Choices for which platform carries an import */
-  viaOptions(): Option[] {
+  viaOptions(id: string, itemId: string): Option[] {
     return [
       { label: 'base.direct', value: '' },
-      ...this.platforms().map(
+      ...this.carriers(id, itemId).map(
         (t): Option => ({
           label: tabLabel(t),
           value: t.id,

@@ -23,6 +23,7 @@ interface ImportRow {
   source: string;
   via: string;
   canShipVia: boolean;
+  viaOptions: Option[];
 }
 
 /** Choose which tab supplies each item the open tab imports */
@@ -60,6 +61,7 @@ export class BaseLinksDialog implements DialogData {
       source: tab.links?.[itemId] ?? '',
       via: tab.via?.[itemId] ?? '',
       canShipVia: this.base.canShipVia(tab.id, itemId),
+      viaOptions: this.base.viaOptions(tab.id, itemId),
     }));
   });
 
@@ -78,8 +80,6 @@ export class BaseLinksDialog implements DialogData {
   readonly sourceOptions = computed((): Option[] =>
     this.base.sourceOptions(this.base.tab()),
   );
-
-  readonly viaOptions = computed(() => this.base.viaOptions());
 
   setSource(itemId: string, source: string | undefined): void {
     this.base.setLink(this.base.tab(), itemId, source || null);

@@ -29,7 +29,17 @@ import {
   SPACE_PLATFORM,
   tabLabel,
 } from '~/base/base-logic';
-import { carriedBy, lapMinutes, routeWarnings, siloPlan } from '~/base/route';
+import {
+  BufferLine,
+  buffers,
+  carriedBy,
+  lapMinutes,
+  routeWarnings,
+  siloPlan,
+  SPACE_LOCATIONS,
+  spoilWarnings,
+  stationAt,
+} from '~/base/route';
 import { Button } from '~/components/button/button';
 import { Checkbox } from '~/components/checkbox/checkbox';
 import { Confirm } from '~/components/confirm/confirm';
@@ -70,6 +80,13 @@ interface OverviewRow {
   /** For platforms */
   lap?: string;
   cargo?: string;
+  buffers: BufferRow[];
+}
+
+interface BufferRow {
+  itemId: string;
+  text: string;
+  detail: string;
 }
 
 @Component({
@@ -176,6 +193,7 @@ export class BaseBar {
     const stale = this.base.staleTabs();
     const names = this.buildNames();
     const labels = new Map(state.tabs.map((t) => [t.id, tabLabel(t)]));
+    const held = buffers(state);
 
     return state.tabs.map((tab) => {
       const summary = state.summaries?.[tab.id];
@@ -213,6 +231,7 @@ export class BaseBar {
           ? `${Number(rockets.toNumber().toFixed(2))}/min`
           : undefined,
         silos: this.silos(state, tab.id, labels),
+        buffers: (held[tab.id] ?? []).map((b) => this.bufferRow(b, labels)),
         ...this.lapAndCargo(state, tab.id),
       };
     });
@@ -242,7 +261,14 @@ export class BaseBar {
 
     for (const w of routeWarnings(state))
       warnings.push(
-        `${label(w.platform)}: carries items for ${this.locationName(w.location)} but its route does not stop there`,
+        w.kind === 'missedStop'
+          ? `${label(w.platform)}: carries items for ${this.locationName(w.location)} but its route does not stop there`
+          : `${label(w.platform)}: hands items to ${label(w.other)}, which also moves, so both have to be in the same orbit at once. Park one of them (a route with one stop).`,
+      );
+
+    for (const w of spoilWarnings(state))
+      warnings.push(
+        `${label(w.tab)}: ${this.itemName(w.itemId)} can be up to ${Math.round(w.age).toString()} min old when used, but spoils after ${w.spoils.toString()} min`,
       );
 
     return warnings;
@@ -266,12 +292,40 @@ export class BaseBar {
     return { total: plan.total, lines };
   }
 
+  private bufferRow(b: BufferLine, labels: Map<string, string>): BufferRow {
+    const stack = this.settingsStore
+      .dataset()
+      .itemRecord[b.itemId]?.stack?.toNumber();
+    const amount = Math.ceil(b.amount - 1e-9);
+    const stacks = stack
+      ? ` (${Math.ceil(amount / stack).toString()} stacks)`
+      : '';
+    const platform = labels.get(b.platform) ?? b.platform;
+    const lap = `${Number(b.lap.toFixed(1)).toString()} min`;
+    const detail =
+      b.kind === 'pickup'
+        ? `ready for ${platform}, ${lap} lap`
+        : b.kind === 'dropoff'
+          ? `between ${platform} drops, ${lap} lap`
+          : `carried per ${lap} lap`;
+    return {
+      itemId: b.itemId,
+      text: `${this.itemName(b.itemId)} ${amount.toLocaleString()}${stacks}`,
+      detail,
+    };
+  }
+
   private lapAndCargo(
     state: BaseState,
     id: string,
   ): Pick<OverviewRow, 'lap' | 'cargo'> {
     const tab = state.tabs.find((t) => t.id === id);
     if (tab?.location !== SPACE_PLATFORM) return {};
+    const station = stationAt(tab);
+    if (station)
+      return {
+        lap: `parked at ${SPACE_LOCATIONS[station] ?? this.locationName(station)}`,
+      };
     const lap = lapMinutes(tab.route);
     if (lap == null) return {};
     const items = this.settingsStore.dataset().itemRecord;

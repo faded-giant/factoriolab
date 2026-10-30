@@ -160,6 +160,9 @@
               {{ 'base.silos' | translate }}
             </th>
             <th class="pe-3 py-1">{{ 'base.lap' | translate }}</th>
+            <th class="pe-3 py-1" labTooltip="base.buffersTooltip">
+              {{ 'base.buffers' | translate }}
+            </th>
             <th></th>
           </tr>
         </thead>
@@ -227,6 +230,17 @@
                     <div class="text-xs text-gray-400">{{ row.cargo }}</div>
                   }
                 } @else {
+                  –
+                }
+              </td>
+              <td class="pe-3 py-1">
+                @for (b of row.buffers; track $index) {
+                  <div class="gap-1 flex items-center">
+                    <lab-icon [value]="b.itemId" type="item"></lab-icon>
+                    {{ b.text }}
+                  </div>
+                  <div class="text-xs mb-1 text-gray-400">{{ b.detail }}</div>
+                } @empty {
                   –
                 }
               </td>
