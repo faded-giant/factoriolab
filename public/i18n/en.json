@@ -89,9 +89,8 @@
     "waitSeconds": "Wait (s)",
     "working": "Updating {{ name }}…",
     "powerHeader": "Power",
-    "powerHelp": "Pick how {{ name }} makes its electricity. Fuel for the generators is added to the build as an output, so it also counts what making the fuel takes.",
+    "powerHelp": "Plan each tab's generators. Use several sources with a share each: a percentage, a fixed MW, or leave it blank for the rest. Fuel for the generators is added to the build, so making it is counted too.",
     "powerSourceLabel": "Source",
-    "powerNone": "Not planned",
     "powerSource": {
       "solar": "Solar panels",
       "steam-engine": "Steam engines and boilers",
@@ -109,15 +108,12 @@
       "legendary": "Legendary"
     },
     "powerFuel": "Fuel",
-    "powerUnsolved": "Waiting for the build to be solved",
-    "powerDemand": "Covers {{ mw }} MW",
     "powerProblem": {
       "noRoute": "Give the platform a route first: panels are sized for the dimmest stop",
       "noSun": "No sunlight here",
       "noFuel": "That item is not a fuel"
     },
     "powerRows": "Reactors in two rows, so each gets the neighbour bonus",
-    "powerFuelAdded": "{{ fuel }} added to the build",
     "powerNote": {
       "solar": "Panels average 70% of their peak over a day; accumulators carry the night. Platforms are always lit, sized for the dimmest stop.",
       "steam-engine": "The build makes 165° steam with boilers, burning its chosen fuel.",
@@ -126,7 +122,13 @@
       "nuclear": "Fuel is for the power used, not full output. Water for the heat exchangers is not counted.",
       "fusion": "Each reactor also draws power itself, which is included. Fuel is for the power used; the fluoroketone loop is not counted."
     },
-    "powerTooltip": "Electric use, and the generators planned for it. Click to choose a power source."
+    "powerShare": "Share",
+    "powerShareTooltip": "40% of the tab's use, 500 for a fixed 500 MW, or blank to cover whatever is left",
+    "powerRest": "rest",
+    "powerCovers": "Covers",
+    "powerAdd": "Add power source",
+    "powerRemove": "Remove power source",
+    "powerUncovered": "{{ mw }} not covered by any source"
   },
   "beaconsSelect": {
     "addBeacons": "Add beacons",

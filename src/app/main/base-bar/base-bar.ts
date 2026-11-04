@@ -11,7 +11,6 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
-  faBolt,
   faExclamationTriangle,
   faLink,
   faPencil,
@@ -30,7 +29,15 @@ import {
   SPACE_PLATFORM,
   tabLabel,
 } from '~/base/base-logic';
-import { powerPlan } from '~/base/power';
+import {
+  DEFAULT_POWER_QUALITY,
+  parseShare,
+  POWER_SOURCES,
+  powerPlan,
+  QUALITY_LEVELS,
+  shareText,
+  tabPowers,
+} from '~/base/power';
 import {
   BufferLine,
   buffers,
@@ -51,12 +58,11 @@ import { Tooltip } from '~/components/tooltip/tooltip';
 import { Library } from '~/library/library';
 import { Option } from '~/option/option';
 import { rational } from '~/rational/rational';
-import { BaseState } from '~/state/preferences/base-state';
+import { BaseState, PowerSource } from '~/state/preferences/base-state';
 import { SettingsStore } from '~/state/settings/settings-store';
 import { TranslatePipe } from '~/translate/translate-pipe';
 
 import { BaseLinksDialog } from '../base-links-dialog/base-links-dialog';
-import { BasePowerDialog } from '../base-power-dialog/base-power-dialog';
 import { BaseRouteDialog } from '../base-route-dialog/base-route-dialog';
 
 interface OverviewItem {
@@ -75,9 +81,6 @@ interface OverviewRow {
   stale: boolean;
   buildings?: string;
   power?: string;
-  /** Planned generators and the fuel they need */
-  generators: OverviewItem[];
-  powerProblem?: string;
   imports: OverviewItem[];
   exports: OverviewItem[];
   rockets?: string;
@@ -87,6 +90,29 @@ interface OverviewRow {
   lap?: string;
   cargo?: string;
   buffers: BufferRow[];
+}
+
+interface PowerSourceRow {
+  index: number;
+  source: PowerSource;
+  quality: number;
+  fuel?: string;
+  share: string;
+  /** MW covered */
+  covers: string;
+  buildings: OverviewItem[];
+  fuelUse?: OverviewItem;
+  problem?: string;
+  rows: boolean;
+}
+
+interface PowerTabRow {
+  id: string;
+  label: string;
+  location?: string;
+  demand?: string;
+  uncovered?: string;
+  sources: PowerSourceRow[];
 }
 
 interface SiloLine {
@@ -126,7 +152,6 @@ export class BaseBar {
   protected readonly OVERVIEW = OVERVIEW;
   protected readonly BaseLinksDialog = BaseLinksDialog;
   protected readonly BaseRouteDialog = BaseRouteDialog;
-  protected readonly BasePowerDialog = BasePowerDialog;
 
   /** Whether the open tab is a platform, which has a route */
   protected readonly onPlatform = computed(
@@ -137,7 +162,6 @@ export class BaseBar {
   protected readonly faLink = faLink;
   protected readonly faPencil = faPencil;
   protected readonly faPlus = faPlus;
-  protected readonly faBolt = faBolt;
   protected readonly faRoute = faRoute;
   protected readonly faTrash = faTrash;
   protected readonly faXmark = faXmark;
@@ -227,7 +251,6 @@ export class BaseBar {
         stale: stale.has(tab.id),
         buildings: summary?.buildings,
         power: power != null ? `${Number(power.toFixed(1))} MW` : undefined,
-        ...this.generators(state, tab.id),
         imports: Object.entries(imports).map(([itemId, i]) => {
           const source = tab.links?.[itemId];
           const from = source ? ` ← ${labels.get(source) ?? source}` : '';
@@ -251,6 +274,86 @@ export class BaseBar {
       };
     });
   });
+
+  readonly powerRows = computed((): PowerTabRow[] => {
+    const state = this.base.state();
+    if (!state) return [];
+    const fuels = this.base.fuels();
+    return state.tabs
+      .filter((t) => t.build != null)
+      .map((tab) => {
+        const plan = powerPlan(state, tab.id, fuels);
+        const kW = state.summaries?.[tab.id]?.power;
+        const mw = (n: number): string => `${Number(n.toFixed(1))} MW`;
+        return {
+          id: tab.id,
+          label: tabLabel(tab),
+          location: tab.location,
+          demand:
+            kW != null
+              ? mw(rational(kW).div(rational(1000n)).toNumber())
+              : undefined,
+          uncovered: plan?.uncovered ? mw(plan.uncovered) : undefined,
+          sources: tabPowers(tab).map((p, index) => {
+            const s = plan?.sources[index];
+            const fuel = s?.fuel;
+            return {
+              index,
+              source: p.source,
+              quality: p.quality ?? DEFAULT_POWER_QUALITY,
+              fuel: p.fuel,
+              share: shareText(p),
+              covers: s ? mw(s.demand) : '–',
+              buildings: (s?.buildings ?? []).map((b) => ({
+                itemId: b.itemId,
+                text: `${this.itemName(b.itemId)} × ${b.count.toLocaleString()}`,
+              })),
+              fuelUse: fuel
+                ? {
+                    itemId: fuel.itemId,
+                    text: `${this.itemName(fuel.itemId)} ${perMinute(fuel.rate)}`,
+                  }
+                : undefined,
+              problem: s?.problem,
+              rows: !!s?.rows,
+            };
+          }),
+        };
+      });
+  });
+
+  readonly sourceOptions: Option[] = POWER_SOURCES.map((s) => ({
+    label: `base.powerSource.${s}`,
+    value: s,
+  }));
+
+  readonly qualityOptions: Option<number>[] = QUALITY_LEVELS.map((q) => ({
+    label: `base.quality.${q.id}`,
+    value: q.level,
+  }));
+
+  readonly fuelOptions = computed((): Option[] => {
+    const data = this.settingsStore.dataset();
+    return Object.keys(this.base.fuels()).map((id) => ({
+      label: data.itemRecord[id]?.name ?? id,
+      value: id,
+      icon: id,
+      iconType: 'item',
+    }));
+  });
+
+  /** Changes after each add, so the add selects reset */
+  protected readonly powerKey = computed(() =>
+    (this.base.state()?.tabs ?? []).map((t) => tabPowers(t).length).join(),
+  );
+
+  setShare(id: string, index: number, text: string): void {
+    this.base.updatePower(id, index, {
+      percent: undefined,
+      mw: undefined,
+      ...parseShare(text),
+    });
+  }
 
   readonly warnings = computed((): string[] => {
     const state = this.base.state();
@@ -312,24 +415,6 @@ export class BaseBar {
     for (const p of plan.unknown)
       line(`${labels.get(p) ?? p}: no lap time yet`);
     return { total: plan.total, lines };
-  }
-
-  private generators(
-    state: BaseState,
-    id: string,
-  ): Pick<OverviewRow, 'generators' | 'powerProblem'> {
-    const plan = powerPlan(state, id, this.base.fuels());
-    if (!plan) return { generators: [] };
-    const generators = plan.buildings.map((b) => ({
-      itemId: b.itemId,
-      text: `${this.itemName(b.itemId)} × ${b.count.toLocaleString()}`,
-    }));
-    if (plan.fuel)
-      generators.push({
-        itemId: plan.fuel.itemId,
-        text: `${this.itemName(plan.fuel.itemId)} ${perMinute(plan.fuel.rate)}`,
-      });
-    return { generators, powerProblem: plan.problem };
   }
 
   private bufferRow(b: BufferLine, labels: Map<string, string>): BufferRow {

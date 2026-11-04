@@ -1,5 +1,6 @@
 import { computed, effect, inject, Service, signal } from '@angular/core';
 
+import { tabPowers } from '~/base/power';
 import { BaseState } from '~/state/preferences/base-state';
 import { BuildMeta } from '~/state/preferences/build-meta';
 import {
@@ -445,12 +446,14 @@ export class SyncStore {
                   lap: t.route.lap,
                 }
               : undefined,
-            power: t.power
-              ? {
-                  source: t.power.source,
-                  quality: t.power.quality,
-                  fuel: t.power.fuel,
-                }
+            power: t.power?.length
+              ? tabPowers(t).map((p) => ({
+                  source: p.source,
+                  quality: p.quality,
+                  fuel: p.fuel,
+                  percent: p.percent,
+                  mw: p.mw,
+                }))
               : undefined,
             applied: sorted(t.applied),
           })),

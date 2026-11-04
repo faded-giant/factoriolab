@@ -362,77 +362,108 @@ try {
   );
   await sleep(500);
 
-  // Power: pick sources for Nauvis in its Power dialog
-  const pick = async (index, text) => {
+  // Power: plan Nauvis with solar and nuclear in the Overview power table
+  const pick = async (selector, index, text) => {
     const opened = await evaluate(`(() => {
-      const select = document.querySelectorAll('lab-base-power-dialog lab-select')[${index}];
-            select?.click();
+      const select = document.querySelectorAll(${JSON.stringify(selector)})[${index}];
+      select?.click();
       return !!select;
     })()`);
     await sleep(500);
     return opened && (await click('li[role="option"]', text));
   };
-  check('opened the Nauvis tab', await click('lab-base-bar button', 'Nauvis'));
-  await sleep(6000);
-  check('clicked Power', await click('lab-base-bar button', 'Power'));
-  await sleep(1000);
-  check('chose solar panels', await pick(0, 'Solar panels'));
-  await sleep(4000);
-  const powerText = () =>
-    evaluate(
-      `document.querySelector('lab-base-power-dialog')?.innerText ?? ''`,
-    );
-  let text = await powerText();
+  const addSelect = 'lab-select[aria-label="Add power source"]';
+  const powerTable = () =>
+    evaluate(`(() => {
+      const tables = document.querySelectorAll('lab-base-bar table');
+      return tables[1]?.innerText ?? '';
+    })()`);
+  const nauvisTab = async () =>
+    (await savedBase()).tabs.find((t) => t.id === 'nauvis');
+  check('back to the overview', await click('lab-base-bar button', 'Overview'));
+  await sleep(2000);
+  check('added solar to Nauvis', await pick(addSelect, 0, 'Solar panels'));
+  await sleep(3000);
+  let text = await powerTable();
   check(
-    'solar plan lists panels and accumulators',
+    'solar row lists panels and accumulators',
     /Solar panel × [\d,]+/.test(text) && /Accumulator × [\d,]+/.test(text),
-    text.replace(/\s+/g, ' ').slice(0, 160),
+    text.replace(/\s+/g, ' ').slice(0, 240),
   );
   check(
-    'chose steam turbines',
-    await pick(0, 'Steam turbines (steam made in the build)'),
+    'added nuclear to Nauvis',
+    await pick(addSelect, 0, 'Nuclear reactors'),
+  );
+  await sleep(2000);
+  const shared = await evaluate(`(() => {
+    const input = document.querySelector('input[aria-label="Share"]');
+    if (!input) return false;
+    input.value = '40%';
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+  })()`);
+  check('set solar to 40%', shared);
+  await sleep(12000);
+  let nauvis = await nauvisTab();
+  check(
+    'two sources saved, solar at 40%',
+    nauvis.power?.length === 2 &&
+      nauvis.power[0].percent === 40 &&
+      nauvis.power[1].source === 'nuclear',
+    JSON.stringify(nauvis.power),
+  );
+  text = await powerTable();
+  check(
+    'nuclear covers the rest, with fuel cells',
+    /Nuclear reactor × \d+/.test(text) &&
+      /Uranium fuel cell [\d.]+\/min/.test(text) &&
+      !text.includes('not covered'),
+    text.replace(/\s+/g, ' ').slice(0, 400),
+  );
+  const cells1 = nauvis.applied?.['uranium-fuel-cell'];
+  check('fuel cells applied to Nauvis', cells1 != null, cells1);
+  const nauvisQ = JSON.parse(
+    await evaluate(`localStorage.getItem('preferences')`),
+  ).states.spa['T – Nauvis'];
+  check(
+    'Nauvis build makes the fuel cells',
+    nauvisQ.includes('uranium-fuel-cell*'),
+    nauvisQ.slice(0, 90),
+  );
+  await sleep(8000);
+  nauvis = await nauvisTab();
+  check(
+    'power demand settles',
+    nauvis.applied?.['uranium-fuel-cell'] === cells1,
+    `${cells1} -> ${nauvis.applied?.['uranium-fuel-cell']}`,
+  );
+  check(
+    'switched nuclear to steam turbines',
+    await pick(
+      'lab-base-bar table:nth-of-type(2) tbody lab-select',
+      2,
+      'Steam turbines (steam made in the build)',
+    ),
   );
   await sleep(12000);
-  text = await powerText();
+  nauvis = await nauvisTab();
   check(
-    'turbine plan adds steam to the build',
-    /Steam turbine × \d+/.test(text) &&
-      /Steam \(500°C\) [\d.]+\/min added to the build/.test(text),
-    text.replace(/\s+/g, ' ').slice(170, 520),
+    'turbines swap fuel cells for steam',
+    nauvis.applied?.steam != null &&
+      nauvis.applied?.['uranium-fuel-cell'] == null,
+    JSON.stringify(nauvis.applied),
   );
-  const steam1 = (await savedBase()).tabs.find((t) => t.id === 'nauvis').applied
-    ?.steam;
-  check('steam objective applied to Nauvis', steam1 != null, steam1);
-  check(
-    'Nauvis build makes the steam',
-    (await evaluate('location.search')).includes('steam*'),
-    (await evaluate('location.search')).slice(0, 80),
-  );
+  for (let n = 0; n < 2; n++) {
+    await click('lab-base-bar button', 'Remove power source');
+    await sleep(1500);
+  }
   await sleep(8000);
-  const steam2 = (await savedBase()).tabs.find((t) => t.id === 'nauvis').applied
-    ?.steam;
-  check('power demand settles', steam1 === steam2, `${steam1} -> ${steam2}`);
-  check('chose nuclear', await pick(0, 'Nuclear reactors'));
-  await sleep(10000);
-  const applied =
-    (await savedBase()).tabs.find((t) => t.id === 'nauvis').applied ?? {};
+  nauvis = await nauvisTab();
   check(
-    'nuclear swaps steam for fuel cells',
-    applied['uranium-fuel-cell'] != null && applied.steam == null,
-    JSON.stringify(applied),
+    'removing the sources removes the fuel',
+    nauvis.power == null && nauvis.applied?.steam == null,
+    JSON.stringify(nauvis.applied),
   );
-  check('chose not planned', await pick(0, 'Not planned'));
-  await sleep(8000);
-  const cleared = (await savedBase()).tabs.find((t) => t.id === 'nauvis');
-  check(
-    'clearing the source removes the fuel',
-    cleared.power == null && cleared.applied?.['uranium-fuel-cell'] == null,
-    JSON.stringify(cleared.applied),
-  );
-  await evaluate(
-    `document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`,
-  );
-  await sleep(500);
 
   // 8. Platform chain: an egg shuttle brings biter eggs from Nauvis to a
   // barge parked at Aquilo, which hands them to the promethium gatherer

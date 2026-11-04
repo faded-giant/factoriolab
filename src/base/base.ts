@@ -27,6 +27,7 @@ import {
   BaseState,
   BaseTab,
   PlatformRoute,
+  PowerSource,
   TabPower,
 } from '~/state/preferences/base-state';
 import { PreferencesStore } from '~/state/preferences/preferences-store';
@@ -48,7 +49,12 @@ import {
   withTabIds,
 } from './base-logic';
 import { Headless } from './headless';
-import { HEAT_MACHINES } from './power';
+import {
+  DEFAULT_POWER_QUALITY,
+  DEFAULT_TOWER_FUEL,
+  HEAT_MACHINES,
+  tabPowers,
+} from './power';
 
 export interface ActiveBase {
   modId: string;
@@ -516,8 +522,31 @@ export class Base {
     this.updateTab(id, { route });
   }
 
-  setPower(id: string, power: TabPower | undefined): void {
+  addPower(id: string, source: PowerSource): void {
+    const tab = this.state()?.tabs.find((t) => t.id === id);
+    const power: TabPower = { source, quality: DEFAULT_POWER_QUALITY };
+    if (source === 'heating-tower') power.fuel = DEFAULT_TOWER_FUEL;
+    this.updateTab(id, { power: [...tabPowers(tab), power] });
+  }
+
+  updatePower(id: string, index: number, change: Partial<TabPower>): void {
+    const tab = this.state()?.tabs.find((t) => t.id === id);
+    const power = tabPowers(tab).map((p, i) => {
+      if (i !== index) return p;
+      const next: TabPower = { ...p, ...change };
+      for (const key of Object.keys(next) as (keyof TabPower)[])
+        if (next[key] === undefined) delete next[key];
+      if (next.source === 'heating-tower') next.fuel ??= DEFAULT_TOWER_FUEL;
+      else delete next.fuel;
+      return next;
+    });
     this.updateTab(id, { power });
+  }
+
+  removePower(id: string, index: number): void {
+    const tab = this.state()?.tabs.find((t) => t.id === id);
+    const power = tabPowers(tab).filter((_, i) => i !== index);
+    this.updateTab(id, { power: power.length ? power : undefined });
   }
 
   setSecondRocket(value: boolean): void {

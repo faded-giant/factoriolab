@@ -3,6 +3,7 @@ import {
   BaseState,
   BaseTab,
   PowerSource,
+  TabPower,
 } from '~/state/preferences/base-state';
 
 /** Same as in base-logic, which imports this file */
@@ -95,7 +96,7 @@ export interface PowerLine {
 }
 
 export interface PowerPlan {
-  /** Electric use being covered, MW */
+  /** Electric use this source covers, MW */
   demand: number;
   buildings: PowerLine[];
   /** Fuel the build makes for the generators, per second */
@@ -106,6 +107,22 @@ export interface PowerPlan {
   problem?: 'noRoute' | 'noSun' | 'noFuel';
 }
 
+export interface TabPowerPlan {
+  /** Electric use of the whole tab, MW */
+  demand: number;
+  /** One per source, in the tab's order */
+  sources: PowerPlan[];
+  /** MW no source covers */
+  uncovered: number;
+}
+
+/** A tab's power sources; older bases kept a single one */
+export function tabPowers(tab: BaseTab | undefined): TabPower[] {
+  const power = tab?.power as TabPower[] | TabPower | undefined;
+  if (power == null) return [];
+  return Array.isArray(power) ? power : [power];
+}
+
 /**
  * Electric use the plan covers, MW, rounded up to 0.1 MW. Rounding lets the
  * fuel added to a build settle: the fuel chain uses power too, so each pass
@@ -114,6 +131,8 @@ export interface PowerPlan {
 function demandMW(kW: number): number {
   return Math.ceil(kW / 100 - 1e-9) / 10;
 }
+
+const tenth = (mw: number): number => Math.ceil(mw * 10 - 1e-9) / 10;
 
 const count = (need: number, each: number): number =>
   Math.ceil(need / each - 1e-9);
@@ -144,18 +163,55 @@ function sunlight(base: BaseState, tab: BaseTab): number | undefined {
   return Math.min(...stops.map((s) => SOLAR[s.location]?.space ?? 1));
 }
 
-/** Generators for tab `id`, or undefined if it has no source or no totals */
+/**
+ * Generators for tab `id`, or undefined if it has no sources or no totals.
+ * Fixed MW shares are covered first, then percentages of the tab's use, and
+ * sources with neither split what is left evenly.
+ */
 export function powerPlan(
   base: BaseState,
   id: string,
   fuels: Record<string, number> = {},
-): PowerPlan | undefined {
+): TabPowerPlan | undefined {
   const tab = base.tabs.find((t) => t.id === id);
-  const choice = tab?.power;
+  const choices = tabPowers(tab);
   const kW = base.summaries?.[id]?.power;
-  if (!tab || !choice || kW == null) return undefined;
+  if (!tab || !choices.length || kW == null) return undefined;
 
   const demand = demandMW(rational(kW).toNumber());
+  const shares = choices.map(() => 0);
+  let left = demand;
+  choices.forEach((c, i) => {
+    if (c.mw == null) return;
+    shares[i] = Math.min(c.mw, left);
+    left -= shares[i];
+  });
+  choices.forEach((c, i) => {
+    if (c.mw != null || c.percent == null) return;
+    shares[i] = Math.min(tenth((demand * c.percent) / 100), left);
+    left -= shares[i];
+  });
+  const rest = choices.filter((c) => c.mw == null && c.percent == null);
+  choices.forEach((c, i) => {
+    if (c.mw == null && c.percent == null)
+      shares[i] = tenth(left / rest.length);
+  });
+  if (rest.length) left = 0;
+
+  return {
+    demand,
+    sources: choices.map((c, i) => sourcePlan(base, tab, c, shares[i], fuels)),
+    uncovered: Math.max(0, Number(left.toFixed(1))),
+  };
+}
+
+function sourcePlan(
+  base: BaseState,
+  tab: BaseTab,
+  choice: TabPower,
+  demand: number,
+  fuels: Record<string, number>,
+): PowerPlan {
   const q = qualityMultiplier(choice.quality ?? DEFAULT_POWER_QUALITY);
   const plan: PowerPlan = { demand, buildings: [] };
   if (demand <= 0) return plan;
@@ -268,6 +324,27 @@ export function powerDemands(
   id: string,
   fuels?: Record<string, number>,
 ): Record<string, Rational> {
-  const fuel = powerPlan(base, id, fuels)?.fuel;
-  return fuel?.rate.nonzero() ? { [fuel.itemId]: fuel.rate } : {};
+  const result: Record<string, Rational> = {};
+  for (const { fuel } of powerPlan(base, id, fuels)?.sources ?? [])
+    if (fuel?.rate.nonzero())
+      result[fuel.itemId] = (result[fuel.itemId] ?? rational.zero).add(
+        fuel.rate,
+      );
+  return result;
+}
+
+/** Reads a share typed by the user: "40%", "500" (MW) or blank for the rest */
+export function parseShare(text: string): Pick<TabPower, 'percent' | 'mw'> {
+  const value = text.trim().toLowerCase().replace(/mw$/, '').trim();
+  if (!value) return {};
+  const percent = value.endsWith('%');
+  const n = Number(percent ? value.slice(0, -1) : value);
+  if (!Number.isFinite(n) || n < 0) return {};
+  return percent ? { percent: Math.min(n, 100) } : { mw: n };
+}
+
+export function shareText(power: TabPower): string {
+  if (power.mw != null) return `${power.mw.toString()} MW`;
+  if (power.percent != null) return `${power.percent.toString()}%`;
+  return '';
 }
