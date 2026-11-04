@@ -362,6 +362,78 @@ try {
   );
   await sleep(500);
 
+  // Power: pick sources for Nauvis in its Power dialog
+  const pick = async (index, text) => {
+    const opened = await evaluate(`(() => {
+      const select = document.querySelectorAll('lab-base-power-dialog lab-select')[${index}];
+            select?.click();
+      return !!select;
+    })()`);
+    await sleep(500);
+    return opened && (await click('li[role="option"]', text));
+  };
+  check('opened the Nauvis tab', await click('lab-base-bar button', 'Nauvis'));
+  await sleep(6000);
+  check('clicked Power', await click('lab-base-bar button', 'Power'));
+  await sleep(1000);
+  check('chose solar panels', await pick(0, 'Solar panels'));
+  await sleep(4000);
+  const powerText = () =>
+    evaluate(
+      `document.querySelector('lab-base-power-dialog')?.innerText ?? ''`,
+    );
+  let text = await powerText();
+  check(
+    'solar plan lists panels and accumulators',
+    /Solar panel × [\d,]+/.test(text) && /Accumulator × [\d,]+/.test(text),
+    text.replace(/\s+/g, ' ').slice(0, 160),
+  );
+  check(
+    'chose steam turbines',
+    await pick(0, 'Steam turbines (steam made in the build)'),
+  );
+  await sleep(12000);
+  text = await powerText();
+  check(
+    'turbine plan adds steam to the build',
+    /Steam turbine × \d+/.test(text) &&
+      /Steam \(500°C\) [\d.]+\/min added to the build/.test(text),
+    text.replace(/\s+/g, ' ').slice(170, 520),
+  );
+  const steam1 = (await savedBase()).tabs.find((t) => t.id === 'nauvis').applied
+    ?.steam;
+  check('steam objective applied to Nauvis', steam1 != null, steam1);
+  check(
+    'Nauvis build makes the steam',
+    (await evaluate('location.search')).includes('steam*'),
+    (await evaluate('location.search')).slice(0, 80),
+  );
+  await sleep(8000);
+  const steam2 = (await savedBase()).tabs.find((t) => t.id === 'nauvis').applied
+    ?.steam;
+  check('power demand settles', steam1 === steam2, `${steam1} -> ${steam2}`);
+  check('chose nuclear', await pick(0, 'Nuclear reactors'));
+  await sleep(10000);
+  const applied =
+    (await savedBase()).tabs.find((t) => t.id === 'nauvis').applied ?? {};
+  check(
+    'nuclear swaps steam for fuel cells',
+    applied['uranium-fuel-cell'] != null && applied.steam == null,
+    JSON.stringify(applied),
+  );
+  check('chose not planned', await pick(0, 'Not planned'));
+  await sleep(8000);
+  const cleared = (await savedBase()).tabs.find((t) => t.id === 'nauvis');
+  check(
+    'clearing the source removes the fuel',
+    cleared.power == null && cleared.applied?.['uranium-fuel-cell'] == null,
+    JSON.stringify(cleared.applied),
+  );
+  await evaluate(
+    `document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`,
+  );
+  await sleep(500);
+
   // 8. Platform chain: an egg shuttle brings biter eggs from Nauvis to a
   // barge parked at Aquilo, which hands them to the promethium gatherer
   await go(`${APP}/spa/list?o=promethium-science-pack*10&v=12`, 8000);

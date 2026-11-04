@@ -114,6 +114,15 @@
         'base.error' | translate
       }}</span>
     }
+    @if (base.tab() !== OVERVIEW && !base.busy()) {
+      <button
+        type="button"
+        labButton
+        [faIcon]="faBolt"
+        text="base.power"
+        (click)="dialog.open(BasePowerDialog)"
+      ></button>
+    }
     @if (onPlatform()) {
       <button
         type="button"
@@ -191,7 +200,28 @@
                 </div>
               </td>
               <td class="pe-3 py-1">{{ row.buildings ?? '–' }}</td>
-              <td class="pe-3 py-1">{{ row.power ?? '–' }}</td>
+              <td class="pe-3 py-1">
+                <button
+                  type="button"
+                  class="text-left hover:underline"
+                  labTooltip="base.powerTooltip"
+                  [disabled]="row.unused"
+                  (click)="dialog.open(BasePowerDialog, { data: row.id })"
+                >
+                  {{ row.power ?? '–' }}
+                </button>
+                @if (row.powerProblem) {
+                  <div class="text-xs text-complement-400">
+                    {{ 'base.powerProblem.' + row.powerProblem | translate }}
+                  </div>
+                }
+                @for (g of row.generators; track g.itemId) {
+                  <div class="gap-1 text-xs flex items-center text-gray-400">
+                    <lab-icon [value]="g.itemId" type="item"></lab-icon>
+                    {{ g.text }}
+                  </div>
+                }
+              </td>
               <td class="pe-3 py-1">
                 @for (item of row.imports; track item.itemId) {
                   <div class="gap-1 flex items-center">

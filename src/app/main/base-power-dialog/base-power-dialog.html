@@ -1,0 +1,69 @@
+<p class="text-sm text-gray-300">
+  {{ 'base.powerHelp' | translate: { name: label() } }}
+</p>
+
+<div class="gap-x-3 gap-y-2 grid grid-cols-[auto_minmax(0,1fr)] items-center">
+  <span class="text-sm text-gray-300">{{
+    'base.powerSourceLabel' | translate
+  }}</span>
+  <lab-select
+    [options]="sourceOptions"
+    [value]="choice()?.source ?? NONE"
+    (valueChange)="setSource($event ?? NONE)"
+  ></lab-select>
+  @if (choice(); as c) {
+    <span class="text-sm text-gray-300">{{
+      'base.powerQuality' | translate
+    }}</span>
+    <lab-select
+      [options]="qualityOptions"
+      [value]="c.quality ?? 5"
+      (valueChange)="setQuality($event ?? 5)"
+    ></lab-select>
+    @if (c.source === 'heating-tower') {
+      <span class="text-sm text-gray-300">{{
+        'base.powerFuel' | translate
+      }}</span>
+      <lab-select
+        [options]="fuelOptions()"
+        [value]="c.fuel"
+        (valueChange)="$event && setFuel($event)"
+      ></lab-select>
+    }
+  }
+</div>
+
+@if (choice(); as c) {
+  <div class="text-sm gap-1 flex flex-col">
+    @if (!summary()) {
+      <span class="text-gray-400">{{ 'base.powerUnsolved' | translate }}</span>
+    } @else if (plan(); as p) {
+      <span>{{ 'base.powerDemand' | translate: { mw: p.demand } }}</span>
+      @if (p.problem) {
+        <span class="text-complement-400">{{
+          'base.powerProblem.' + p.problem | translate
+        }}</span>
+      }
+      @for (line of lines(); track line.itemId) {
+        <div class="gap-1 flex items-center">
+          <lab-icon [value]="line.itemId" type="item"></lab-icon>
+          {{ line.text }}
+        </div>
+      }
+      @if (p.rows) {
+        <span class="text-xs text-gray-400">{{
+          'base.powerRows' | translate
+        }}</span>
+      }
+      @if (fuel(); as f) {
+        <div class="gap-1 flex items-center">
+          <lab-icon [value]="f.itemId" type="item"></lab-icon>
+          {{ 'base.powerFuelAdded' | translate: { fuel: f.text } }}
+        </div>
+      }
+      <span class="text-xs text-gray-400">{{
+        'base.powerNote.' + c.source | translate
+      }}</span>
+    }
+  </div>
+}

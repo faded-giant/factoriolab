@@ -32,11 +32,29 @@ export interface BaseTab {
   via?: Record<string, string>;
   /** For platform tabs */
   route?: PlatformRoute;
+  /** How the tab makes its electricity, if planned */
+  power?: TabPower;
   /**
    * Export amounts (item id -> items per second) last written into this tab's
    * objectives, used to find and update those objectives later
    */
   applied?: Record<string, string>;
+}
+
+export type PowerSource =
+  | 'solar'
+  | 'steam-engine'
+  | 'steam-turbine'
+  | 'heating-tower'
+  | 'nuclear'
+  | 'fusion';
+
+export interface TabPower {
+  source: PowerSource;
+  /** Quality level of the generators, 0 (normal) to 5 (legendary) */
+  quality?: number;
+  /** Item burned in heating towers */
+  fuel?: string;
 }
 
 /** What a tab needs from elsewhere, from its last solve */

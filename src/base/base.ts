@@ -27,6 +27,7 @@ import {
   BaseState,
   BaseTab,
   PlatformRoute,
+  TabPower,
 } from '~/state/preferences/base-state';
 import { PreferencesStore } from '~/state/preferences/preferences-store';
 import { RouterSync } from '~/state/router/router-sync';
@@ -47,6 +48,7 @@ import {
   withTabIds,
 } from './base-logic';
 import { Headless } from './headless';
+import { HEAT_MACHINES } from './power';
 
 export interface ActiveBase {
   modId: string;
@@ -128,12 +130,27 @@ export class Base {
     return silo ? { itemId: ROCKET_PART, parts: silo.parts } : undefined;
   });
 
+  /** Item id -> MJ for fuels that heating towers can burn */
+  readonly fuels = computed((): Record<string, number> => {
+    const data = this.settingsStore.dataset();
+    const result: Record<string, number> = {};
+    for (const id of data.itemIds) {
+      const fuel = data.itemRecord[id]?.fuel;
+      if (fuel?.value.nonzero() && fuel.types.has('chemical'))
+        result[id] = fuel.value.toNumber();
+    }
+    return result;
+  });
+
   readonly staleTabs = computed(() => {
     const state = this.state();
     const rocket = this.rocketCost();
+    const fuels = this.fuels();
     if (!state) return new Set<string>();
     return new Set(
-      state.tabs.map((t) => t.id).filter((id) => isStale(state, id, rocket)),
+      state.tabs
+        .map((t) => t.id)
+        .filter((id) => isStale(state, id, rocket, fuels)),
     );
   });
 
@@ -195,7 +212,9 @@ export class Base {
     effect(() => {
       const state = this.state();
       const rocket = this.rocketCost();
-      if (!state || this.busy() || !tabsToProcess(state, rocket).length) return;
+      const fuels = this.fuels();
+      if (!state || this.busy() || !tabsToProcess(state, rocket, fuels).length)
+        return;
       untracked(() => {
         this.schedule();
       });
@@ -497,6 +516,10 @@ export class Base {
     this.updateTab(id, { route });
   }
 
+  setPower(id: string, power: TabPower | undefined): void {
+    this.updateTab(id, { power });
+  }
+
   setSecondRocket(value: boolean): void {
     this.update((s) => ({ ...s, secondRocket: value || undefined }));
   }
@@ -518,7 +541,7 @@ export class Base {
         await this.showLive(build);
         this.tab.set(id);
         const state = this.state();
-        if (state && isStale(state, id, this.rocketCost()))
+        if (state && isStale(state, id, this.rocketCost(), this.fuels()))
           await this.reconcileLive(id, build);
         this.capture(id, this.live());
       } catch (err) {
@@ -557,7 +580,7 @@ export class Base {
     for (let pass = 0; pass < MAX_PASSES; pass++) {
       const state = this.state();
       if (!state) return;
-      const todo = tabsToProcess(state, this.rocketCost());
+      const todo = tabsToProcess(state, this.rocketCost(), this.fuels());
       if (!todo.length) return;
       for (const tab of todo) {
         this.working.set(tabLabel(tab));
@@ -645,7 +668,7 @@ export class Base {
     if (!state || !tab) return false;
 
     const store = solver.objectivesStore;
-    const exports = demandsFor(state, id, this.rocketCost());
+    const exports = demandsFor(state, id, this.rocketCost(), this.fuels());
     const dispRate = solver.settingsStore.displayRateInfo().value;
     const objectives = (): ObjectiveState[] => Object.values(store.state());
     const plan = planReconcile(
@@ -691,7 +714,11 @@ export class Base {
       dispRate,
     );
     const totals = solver.objectivesStore.totals();
-    const power: Rational = totals.power ?? rational.zero;
+    // Heat exchangers run on heat, though the data gives them electric use
+    let power: Rational = totals.power ?? rational.zero;
+    for (const step of solver.objectivesStore.steps())
+      if (step.power && HEAT_MACHINES.has(step.recipeSettings?.machineId ?? ''))
+        power = power.sub(step.power);
     const data = solver.settingsStore.dataset();
     const siloIds = new Set(
       Object.keys(totals.machines).filter(

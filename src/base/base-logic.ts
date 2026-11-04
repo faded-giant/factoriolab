@@ -11,6 +11,8 @@ import {
   TabSummary,
 } from '~/state/preferences/base-state';
 
+import { powerDemands } from './power';
+
 /** Pure calculations for linking builds in a base, kept free of Angular */
 
 export const SPACE_PLATFORM = 'space-platform';
@@ -94,19 +96,26 @@ export function launchesFor(base: BaseState, id: string): Rational {
 }
 
 /**
- * Item id -> items per second tab `id` has to make for other tabs: its exports,
- * plus the rocket parts to launch them
+ * Item id -> items per second tab `id` has to make beyond its own objectives:
+ * its exports, the rocket parts to launch them, and fuel for its generators.
+ * `fuels` is item id -> MJ, for heating towers.
  */
 export function demandsFor(
   base: BaseState,
   id: string,
   rocket?: RocketCost,
+  fuels?: Record<string, number>,
 ): Record<string, Rational> {
   const result = exportsFor(base, id);
-  if (!rocket) return result;
-  const parts = launchesFor(base, id).mul(rocket.parts);
-  if (parts.nonzero())
-    result[rocket.itemId] = (result[rocket.itemId] ?? rational.zero).add(parts);
+  const add = (itemId: string, rate: Rational): void => {
+    result[itemId] = (result[itemId] ?? rational.zero).add(rate);
+  };
+  if (rocket) {
+    const parts = launchesFor(base, id).mul(rocket.parts);
+    if (parts.nonzero()) add(rocket.itemId, parts);
+  }
+  for (const [itemId, rate] of Object.entries(powerDemands(base, id, fuels)))
+    add(itemId, rate);
   return result;
 }
 
@@ -115,10 +124,11 @@ export function isStale(
   base: BaseState,
   id: string,
   rocket?: RocketCost,
+  fuels?: Record<string, number>,
 ): boolean {
   const tab = base.tabs.find((t) => t.id === id);
   if (!tab) return false;
-  const exports = demandsFor(base, id, rocket);
+  const exports = demandsFor(base, id, rocket, fuels);
   const applied = tab.applied ?? {};
   const ids = new Set([...Object.keys(exports), ...Object.keys(applied)]);
   for (const id of ids) {
@@ -265,10 +275,14 @@ export function baseWarnings(base: BaseState): BaseWarning[] {
 }
 
 /** Tabs whose exports changed, or that were never solved, in base order */
-export function tabsToProcess(base: BaseState, rocket?: RocketCost): BaseTab[] {
+export function tabsToProcess(
+  base: BaseState,
+  rocket?: RocketCost,
+  fuels?: Record<string, number>,
+): BaseTab[] {
   return base.tabs.filter(
     (t) =>
-      isStale(base, t.id, rocket) ||
+      isStale(base, t.id, rocket, fuels) ||
       (t.build != null && !base.summaries?.[t.id]),
   );
 }

@@ -11,6 +11,7 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
+  faBolt,
   faExclamationTriangle,
   faLink,
   faPencil,
@@ -29,6 +30,7 @@ import {
   SPACE_PLATFORM,
   tabLabel,
 } from '~/base/base-logic';
+import { powerPlan } from '~/base/power';
 import {
   BufferLine,
   buffers,
@@ -54,6 +56,7 @@ import { SettingsStore } from '~/state/settings/settings-store';
 import { TranslatePipe } from '~/translate/translate-pipe';
 
 import { BaseLinksDialog } from '../base-links-dialog/base-links-dialog';
+import { BasePowerDialog } from '../base-power-dialog/base-power-dialog';
 import { BaseRouteDialog } from '../base-route-dialog/base-route-dialog';
 
 interface OverviewItem {
@@ -72,6 +75,9 @@ interface OverviewRow {
   stale: boolean;
   buildings?: string;
   power?: string;
+  /** Planned generators and the fuel they need */
+  generators: OverviewItem[];
+  powerProblem?: string;
   imports: OverviewItem[];
   exports: OverviewItem[];
   rockets?: string;
@@ -120,6 +126,7 @@ export class BaseBar {
   protected readonly OVERVIEW = OVERVIEW;
   protected readonly BaseLinksDialog = BaseLinksDialog;
   protected readonly BaseRouteDialog = BaseRouteDialog;
+  protected readonly BasePowerDialog = BasePowerDialog;
 
   /** Whether the open tab is a platform, which has a route */
   protected readonly onPlatform = computed(
@@ -130,6 +137,7 @@ export class BaseBar {
   protected readonly faLink = faLink;
   protected readonly faPencil = faPencil;
   protected readonly faPlus = faPlus;
+  protected readonly faBolt = faBolt;
   protected readonly faRoute = faRoute;
   protected readonly faTrash = faTrash;
   protected readonly faXmark = faXmark;
@@ -219,6 +227,7 @@ export class BaseBar {
         stale: stale.has(tab.id),
         buildings: summary?.buildings,
         power: power != null ? `${Number(power.toFixed(1))} MW` : undefined,
+        ...this.generators(state, tab.id),
         imports: Object.entries(imports).map(([itemId, i]) => {
           const source = tab.links?.[itemId];
           const from = source ? ` ← ${labels.get(source) ?? source}` : '';
@@ -303,6 +312,24 @@ export class BaseBar {
     for (const p of plan.unknown)
       line(`${labels.get(p) ?? p}: no lap time yet`);
     return { total: plan.total, lines };
+  }
+
+  private generators(
+    state: BaseState,
+    id: string,
+  ): Pick<OverviewRow, 'generators' | 'powerProblem'> {
+    const plan = powerPlan(state, id, this.base.fuels());
+    if (!plan) return { generators: [] };
+    const generators = plan.buildings.map((b) => ({
+      itemId: b.itemId,
+      text: `${this.itemName(b.itemId)} × ${b.count.toLocaleString()}`,
+    }));
+    if (plan.fuel)
+      generators.push({
+        itemId: plan.fuel.itemId,
+        text: `${this.itemName(plan.fuel.itemId)} ${perMinute(plan.fuel.rate)}`,
+      });
+    return { generators, powerProblem: plan.problem };
   }
 
   private bufferRow(b: BufferLine, labels: Map<string, string>): BufferRow {

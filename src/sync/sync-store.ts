@@ -445,6 +445,13 @@ export class SyncStore {
                   lap: t.route.lap,
                 }
               : undefined,
+            power: t.power
+              ? {
+                  source: t.power.source,
+                  quality: t.power.quality,
+                  fuel: t.power.fuel,
+                }
+              : undefined,
             applied: sorted(t.applied),
           })),
           imports: imports

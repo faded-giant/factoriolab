@@ -87,7 +87,46 @@
     "unused": "not started",
     "via": "Via platform…",
     "waitSeconds": "Wait (s)",
-    "working": "Updating {{ name }}…"
+    "working": "Updating {{ name }}…",
+    "powerHeader": "Power",
+    "powerHelp": "Pick how {{ name }} makes its electricity. Fuel for the generators is added to the build as an output, so it also counts what making the fuel takes.",
+    "powerSourceLabel": "Source",
+    "powerNone": "Not planned",
+    "powerSource": {
+      "solar": "Solar panels",
+      "steam-engine": "Steam engines and boilers",
+      "steam-turbine": "Steam turbines (steam made in the build)",
+      "heating-tower": "Heating towers",
+      "nuclear": "Nuclear reactors",
+      "fusion": "Fusion reactors"
+    },
+    "powerQuality": "Quality",
+    "quality": {
+      "normal": "Normal",
+      "uncommon": "Uncommon",
+      "rare": "Rare",
+      "epic": "Epic",
+      "legendary": "Legendary"
+    },
+    "powerFuel": "Fuel",
+    "powerUnsolved": "Waiting for the build to be solved",
+    "powerDemand": "Covers {{ mw }} MW",
+    "powerProblem": {
+      "noRoute": "Give the platform a route first: panels are sized for the dimmest stop",
+      "noSun": "No sunlight here",
+      "noFuel": "That item is not a fuel"
+    },
+    "powerRows": "Reactors in two rows, so each gets the neighbour bonus",
+    "powerFuelAdded": "{{ fuel }} added to the build",
+    "powerNote": {
+      "solar": "Panels average 70% of their peak over a day; accumulators carry the night. Platforms are always lit, sized for the dimmest stop.",
+      "steam-engine": "The build makes 165° steam with boilers, burning its chosen fuel.",
+      "steam-turbine": "The build makes 500° steam, e.g. acid neutralisation on Vulcanus. Change the steam recipe in the build if needed.",
+      "heating-tower": "Towers turn fuel into 2.5x heat, with no neighbour bonus. Fuel is for the power used, not full output.",
+      "nuclear": "Fuel is for the power used, not full output. Water for the heat exchangers is not counted.",
+      "fusion": "Each reactor also draws power itself, which is included. Fuel is for the power used; the fluoroketone loop is not counted."
+    },
+    "powerTooltip": "Electric use, and the generators planned for it. Click to choose a power source."
   },
   "beaconsSelect": {
     "addBeacons": "Add beacons",
