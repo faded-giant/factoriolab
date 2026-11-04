@@ -72,13 +72,15 @@ export const POWER_SOURCES: PowerSource[] = [
   'fusion',
 ];
 
-export const QUALITY_LEVELS: { level: number; id: string }[] = [
-  { level: 0, id: 'normal' },
-  { level: 1, id: 'uncommon' },
-  { level: 2, id: 'rare' },
-  { level: 3, id: 'epic' },
-  { level: 5, id: 'legendary' },
-];
+/** Building shown for each source */
+export const POWER_SOURCE_ICONS: Record<PowerSource, string> = {
+  solar: 'solar-panel',
+  'steam-engine': 'steam-engine',
+  'steam-turbine': 'steam-turbine',
+  'heating-tower': 'heating-tower',
+  nuclear: 'nuclear-reactor',
+  fusion: 'fusion-reactor',
+};
 
 /** New choices default to legendary, like new builds */
 export const DEFAULT_POWER_QUALITY = 5;

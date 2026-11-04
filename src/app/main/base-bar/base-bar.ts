@@ -10,6 +10,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import {
   faChevronDown,
   faChevronUp,
@@ -35,9 +36,9 @@ import {
   BURNER_SOURCES,
   DEFAULT_POWER_QUALITY,
   parseShare,
+  POWER_SOURCE_ICONS,
   POWER_SOURCES,
   powerPlan,
-  QUALITY_LEVELS,
   shareText,
   tabPowers,
 } from '~/base/power';
@@ -107,8 +108,8 @@ interface PowerSourceRow {
   share: string;
   /** MW covered */
   covers: string;
-  buildings: OverviewItem[];
-  fuelUse?: OverviewItem;
+  buildings: (OverviewItem & { count: string })[];
+  fuelUse?: OverviewItem & { rate: string };
   problem?: string;
   rows: boolean;
 }
@@ -139,6 +140,7 @@ interface BufferRow {
   imports: [
     Button,
     Checkbox,
+    FaIconComponent,
     FormsModule,
     Icon,
     Select,
@@ -172,6 +174,7 @@ export class BaseBar {
   protected readonly faRoute = faRoute;
   protected readonly faTrash = faTrash;
   protected readonly faXmark = faXmark;
+  protected readonly faExclamationTriangle = faExclamationTriangle;
   protected readonly faChevronDown = faChevronDown;
   protected readonly faChevronUp = faChevronUp;
   protected readonly tabLabel = tabLabel;
@@ -317,11 +320,13 @@ export class BaseBar {
               covers: s ? mw(s.demand) : '–',
               buildings: (s?.buildings ?? []).map((b) => ({
                 itemId: b.itemId,
+                count: b.count.toLocaleString(),
                 text: `${this.itemName(b.itemId)} × ${b.count.toLocaleString()}`,
               })),
               fuelUse: fuel
                 ? {
                     itemId: fuel.itemId,
+                    rate: perMinute(fuel.rate),
                     text: `${this.itemName(fuel.itemId)} ${perMinute(fuel.rate)}`,
                   }
                 : undefined,
@@ -342,12 +347,23 @@ export class BaseBar {
   readonly sourceOptions: Option[] = POWER_SOURCES.map((s) => ({
     label: `base.powerSource.${s}`,
     value: s,
+    icon: POWER_SOURCE_ICONS[s],
+    iconType: 'item',
   }));
 
-  readonly qualityOptions: Option<number>[] = QUALITY_LEVELS.map((q) => ({
-    label: `base.quality.${q.id}`,
-    value: q.level,
-  }));
+  /** The game's qualities, with their icons, by level */
+  readonly qualityOptions = computed((): Option<number>[] => {
+    const data = this.settingsStore.dataset();
+    return data.qualityIds
+      .map((id) => data.qualityRecord[id])
+      .filter((q) => q != null)
+      .map((q) => ({
+        label: q.name,
+        value: q.level,
+        icon: q.id,
+        iconType: 'quality',
+      }));
+  });
 
   readonly fuelOptions = computed((): Option[] => {
     const data = this.settingsStore.dataset();
@@ -442,7 +458,7 @@ export class BaseBar {
         counts.set(b.itemId, (counts.get(b.itemId) ?? 0) + b.count);
     return [...counts].map(([itemId, n]) => ({
       itemId,
-      text: `${this.itemName(itemId)} × ${n.toLocaleString()}`,
+      text: n.toLocaleString(),
     }));
   }
 

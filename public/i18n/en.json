@@ -100,13 +100,6 @@
       "fusion": "Fusion reactors"
     },
     "powerQuality": "Quality",
-    "quality": {
-      "normal": "Normal",
-      "uncommon": "Uncommon",
-      "rare": "Rare",
-      "epic": "Epic",
-      "legendary": "Legendary"
-    },
     "powerFuel": "Fuel",
     "powerProblem": {
       "noRoute": "Give the platform a route first: panels are sized for the dimmest stop",

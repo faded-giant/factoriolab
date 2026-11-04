@@ -467,7 +467,7 @@ try {
   await sleep(2000);
   check(
     'picked rocket fuel for the boilers',
-    await pick('lab-base-bar table tbody lab-select', 3, 'Rocket fuel'),
+    await pick('lab-base-bar table tbody lab-select', 4, 'Rocket fuel'),
   );
   await sleep(12000);
   nauvis = await nauvisTab();

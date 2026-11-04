@@ -152,98 +152,103 @@
             labButton
             size="small"
             [faIcon]="powerOpen() ? faChevronUp : faChevronDown"
-            [text]="'base.powerHeader'"
+            text="base.powerHeader"
+            labTooltip="base.powerHelp"
             (click)="powerOpen.set(!powerOpen())"
           ></button>
-          <span class="text-sm text-gray-300">{{ tab.demand ?? '–' }}</span>
+          <span class="text-sm font-mono">{{ tab.demand ?? '–' }}</span>
           @if (!powerOpen()) {
             @for (src of tab.sources; track src.index) {
               @for (b of src.buildings; track b.itemId) {
-                <span class="gap-1 text-xs flex items-center text-gray-400">
-                  <lab-icon [value]="b.itemId" type="item"></lab-icon>
-                  {{ b.text }}
+                <span class="gap-1 text-sm flex items-center">
+                  <span class="font-mono">{{ b.count }}</span>
+                  <lab-icon
+                    [value]="b.itemId"
+                    type="item"
+                    [labTooltip]="b.itemId"
+                    labTooltipType="item"
+                  ></lab-icon>
                 </span>
               }
             }
           }
           @if (tab.uncovered) {
-            <span class="text-xs text-complement-400">{{
-              'base.powerUncovered' | translate: { mw: tab.uncovered }
-            }}</span>
+            <span class="text-sm text-complement-400">
+              <fa-icon [icon]="faExclamationTriangle"></fa-icon>
+              {{ 'base.powerUncovered' | translate: { mw: tab.uncovered } }}
+            </span>
           }
         </div>
         @if (powerOpen()) {
-          <p class="my-1 text-xs text-gray-400">
-            {{ 'base.powerHelp' | translate }}
-          </p>
-          <table class="text-sm w-full">
-            @if (tab.sources.length) {
-              <thead class="text-left text-gray-300">
-                <tr>
-                  <th class="pe-3 py-1">
-                    {{ 'base.powerSourceLabel' | translate }}
-                  </th>
-                  <th class="pe-3 py-1">
-                    {{ 'base.powerQuality' | translate }}
-                  </th>
-                  <th class="pe-3 py-1" labTooltip="base.powerShareTooltip">
-                    {{ 'base.powerShare' | translate }}
-                  </th>
-                  <th class="pe-3 py-1">
-                    {{ 'base.powerCovers' | translate }}
-                  </th>
-                  <th class="pe-3 py-1">{{ 'base.buildings' | translate }}</th>
-                  <th class="pe-3 py-1">{{ 'base.powerFuel' | translate }}</th>
-                  <th></th>
-                </tr>
-              </thead>
-            }
+          <table class="mt-1 lab-table">
+            <thead>
+              <tr>
+                <th>{{ 'base.powerSourceLabel' | translate }}</th>
+                <th labTooltip="base.powerShareTooltip">
+                  {{ 'base.powerShare' | translate }}
+                </th>
+                <th class="text-right">
+                  {{ 'base.powerCovers' | translate }}
+                </th>
+                <th>{{ 'base.buildings' | translate }}</th>
+                <th>{{ 'base.powerFuel' | translate }}</th>
+                <th class="w-0"></th>
+              </tr>
+            </thead>
             <tbody>
               @for (src of tab.sources; track src.index) {
-                <tr class="border-t border-gray-800 align-top">
-                  <td class="pe-3 py-1">
-                    <lab-select
-                      class="w-56"
-                      [options]="sourceOptions"
-                      [value]="src.source"
-                      (valueChange)="
-                        $event &&
-                          base.updatePower(tab.id, src.index, {
-                            source: $any($event),
-                          })
-                      "
-                    ></lab-select>
-                    <div class="mt-1 w-56 text-xs text-gray-400">
-                      {{ 'base.powerNote.' + src.source | translate }}
-                    </div>
-                    @if (src.burns) {
+                <tr>
+                  <td>
+                    <div class="gap-1 flex items-center">
                       <lab-select
-                        class="mt-1 w-56"
-                        [options]="fuelOptions()"
-                        [value]="src.fuel"
+                        [iconOnly]="true"
+                        [options]="sourceOptions"
+                        [value]="src.source"
+                        [labTooltip]="'base.powerNote.' + src.source"
+                        labTooltipPosition="adjacent"
+                        [attr.aria-label]="'base.powerSourceLabel' | translate"
                         (valueChange)="
                           $event &&
                             base.updatePower(tab.id, src.index, {
-                              fuel: $event,
+                              source: $any($event),
                             })
                         "
                       ></lab-select>
-                    }
+                      <lab-select
+                        [iconOnly]="true"
+                        [options]="qualityOptions()"
+                        [value]="src.quality"
+                        labTooltip="base.powerQuality"
+                        [attr.aria-label]="'base.powerQuality' | translate"
+                        (valueChange)="
+                          $event != null &&
+                            base.updatePower(tab.id, src.index, {
+                              quality: $event,
+                            })
+                        "
+                      ></lab-select>
+                      @if (src.burns) {
+                        <lab-select
+                          [iconOnly]="true"
+                          [options]="fuelOptions()"
+                          [value]="src.fuel"
+                          [labTooltip]="src.fuel ?? 'base.powerFuel'"
+                          [labTooltipType]="src.fuel ? 'item' : undefined"
+                          [attr.aria-label]="'base.powerFuel' | translate"
+                          (valueChange)="
+                            $event &&
+                              base.updatePower(tab.id, src.index, {
+                                fuel: $event,
+                              })
+                          "
+                        ></lab-select>
+                      }
+                      <span class="ms-1">{{
+                        'base.powerSource.' + src.source | translate
+                      }}</span>
+                    </div>
                   </td>
-                  <td class="pe-3 py-1">
-                    <lab-select
-                      class="w-32"
-                      [options]="qualityOptions"
-                      [value]="src.quality"
-                      (valueChange)="
-                        $event != null &&
-                          base.updatePower(tab.id, src.index, {
-                            quality: $event,
-                          })
-                      "
-                    ></lab-select>
-                  </td>
-                  <td class="pe-3 py-1">
+                  <td>
                     <input
                       type="text"
                       class="input w-24 grow-0"
@@ -255,36 +260,55 @@
                       "
                     />
                   </td>
-                  <td class="pe-3 py-1">{{ src.covers }}</td>
-                  <td class="pe-3 py-1">
-                    @if (src.problem) {
-                      <div class="text-xs text-complement-400">
-                        {{ 'base.powerProblem.' + src.problem | translate }}
-                      </div>
-                    }
-                    @for (b of src.buildings; track b.itemId) {
-                      <div class="gap-1 flex items-center">
-                        <lab-icon [value]="b.itemId" type="item"></lab-icon>
-                        {{ b.text }}
-                      </div>
-                    }
-                    @if (src.rows) {
-                      <div class="text-xs text-gray-400">
-                        {{ 'base.powerRows' | translate }}
-                      </div>
-                    }
+                  <td class="text-right font-mono whitespace-pre">
+                    {{ src.covers }}
                   </td>
-                  <td class="pe-3 py-1">
+                  <td>
+                    <div class="gap-3 flex flex-wrap items-center">
+                      @if (src.problem) {
+                        <span class="text-complement-400">
+                          <fa-icon [icon]="faExclamationTriangle"></fa-icon>
+                          {{ 'base.powerProblem.' + src.problem | translate }}
+                        </span>
+                      }
+                      @for (b of src.buildings; track b.itemId) {
+                        <span class="gap-1 flex items-center">
+                          <span class="font-mono">{{ b.count }}</span>
+                          <lab-icon
+                            [value]="b.itemId"
+                            type="item"
+                            [labTooltip]="b.itemId"
+                            labTooltipType="item"
+                          ></lab-icon>
+                          <span class="sr-only">{{ b.text }}</span>
+                        </span>
+                      }
+                      @if (src.rows) {
+                        <span
+                          class="text-xs text-gray-400"
+                          labTooltip="base.powerRows"
+                          >2×</span
+                        >
+                      }
+                    </div>
+                  </td>
+                  <td>
                     @if (src.fuelUse; as f) {
-                      <div class="gap-1 flex items-center">
-                        <lab-icon [value]="f.itemId" type="item"></lab-icon>
-                        {{ f.text }}
-                      </div>
+                      <span class="gap-1 flex items-center">
+                        <span class="font-mono">{{ f.rate }}</span>
+                        <lab-icon
+                          [value]="f.itemId"
+                          type="item"
+                          [labTooltip]="f.itemId"
+                          labTooltipType="item"
+                        ></lab-icon>
+                        <span class="sr-only">{{ f.text }}</span>
+                      </span>
                     } @else {
                       –
                     }
                   </td>
-                  <td class="py-1">
+                  <td>
                     <button
                       type="button"
                       labButton
@@ -298,11 +322,11 @@
                   </td>
                 </tr>
               }
-              <tr class="border-t border-gray-800">
-                <td class="pe-3 py-1" colspan="7">
+              <tr>
+                <td colspan="6">
                   @for (key of [powerKey()]; track key) {
                     <lab-select
-                      class="w-56"
+                      class="w-64"
                       placeholder="base.powerAdd"
                       [options]="sourceOptions"
                       [attr.aria-label]="'base.powerAdd' | translate"
@@ -319,7 +343,6 @@
       </div>
     }
   }
-
   @if (base.tab() === OVERVIEW) {
     <div class="px-1 pb-3 sm:px-3 lg:px-6 overflow-x-auto">
       <table class="text-sm w-full">
@@ -370,12 +393,19 @@
               <td class="pe-3 py-1">{{ row.buildings ?? '–' }}</td>
               <td class="pe-3 py-1">
                 {{ row.power ?? '–' }}
-                @for (g of row.generators; track g.itemId) {
-                  <div class="gap-1 text-xs flex items-center text-gray-400">
-                    <lab-icon [value]="g.itemId" type="item"></lab-icon>
-                    {{ g.text }}
-                  </div>
-                }
+                <div class="gap-x-3 flex flex-wrap items-center">
+                  @for (g of row.generators; track g.itemId) {
+                    <span class="gap-1 flex items-center">
+                      <span class="font-mono">{{ g.text }}</span>
+                      <lab-icon
+                        [value]="g.itemId"
+                        type="item"
+                        [labTooltip]="g.itemId"
+                        labTooltipType="item"
+                      ></lab-icon>
+                    </span>
+                  }
+                </div>
               </td>
               <td class="pe-3 py-1">
                 @for (item of row.imports; track item.itemId) {
