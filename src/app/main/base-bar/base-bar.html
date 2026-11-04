@@ -9,7 +9,7 @@
       [disabled]="!!base.busy()"
       (click)="base.select(OVERVIEW)"
     ></button>
-    @for (tab of base.state()?.tabs ?? []; track tab.id) {
+    @for (tab of base.view()?.tabs ?? []; track tab.id) {
       <div class="flex items-center" [class.opacity-60]="!tab.build">
         @if (renaming() === tab.id) {
           <input
@@ -104,9 +104,13 @@
 
     <span class="grow"></span>
 
-    @if (base.busy() ?? base.working(); as name) {
+    @if (base.busy(); as name) {
       <span class="mx-1 text-sm text-gray-300">{{
         'base.working' | translate: { name: name }
+      }}</span>
+    } @else if (base.working()) {
+      <span class="mx-1 text-sm text-gray-300">{{
+        'base.updating' | translate
       }}</span>
     }
     @if (base.stuck(); as stuck) {
@@ -495,7 +499,7 @@
           class="mt-2"
           label="base.secondRocket"
           labTooltip="base.secondRocketTooltip"
-          [ngModel]="!!base.state()?.secondRocket"
+          [ngModel]="!!base.view()?.secondRocket"
           (ngModelChange)="base.setSecondRocket($event)"
         ></lab-checkbox>
       }

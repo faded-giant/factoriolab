@@ -378,6 +378,17 @@ try {
       const tables = document.querySelectorAll('lab-base-bar table');
       return tables[0]?.innerText ?? '';
     })()`);
+  // The panel should change when edited and once more when solved, and not
+  // ripple through every background pass in between
+  const watchTable = async (ms) => {
+    const seen = [];
+    for (let t = 0; t < ms; t += 100) {
+      const now = (await powerTable()).replace(/\s+/g, ' ');
+      if (seen.at(-1) !== now) seen.push(now);
+      await sleep(100);
+    }
+    return seen;
+  };
   const nauvisTab = async () =>
     (await savedBase()).tabs.find((t) => t.id === 'nauvis');
   check(
@@ -406,7 +417,12 @@ try {
     return true;
   })()`);
   check('set solar to 40%', shared);
-  await sleep(12000);
+  let frames = await watchTable(12000);
+  check(
+    'power table holds still while it solves',
+    frames.length <= 3,
+    `${frames.length} versions`,
+  );
   let nauvis = await nauvisTab();
   check(
     'two sources saved, solar at 40%',
@@ -448,7 +464,12 @@ try {
       'Steam turbines (steam made in the build)',
     ),
   );
-  await sleep(12000);
+  frames = await watchTable(12000);
+  check(
+    'switching source changes the table at most twice',
+    frames.length <= 3,
+    `${frames.length} versions`,
+  );
   nauvis = await nauvisTab();
   check(
     'turbines swap fuel cells for steam',

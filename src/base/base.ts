@@ -74,9 +74,8 @@ interface DemoBuild {
   excluded?: string[];
 }
 const ROCKET_PART = 'rocket-part';
-const MAX_PASSES = 8;
 /** Passes after which tabs that keep changing each other are left alone */
-const MAX_TOTAL_PASSES = 24;
+const MAX_PASSES = 24;
 
 function waitFor(source: Observable<unknown>, ms: number): Promise<boolean> {
   return firstValueFrom(
@@ -162,10 +161,42 @@ export class Base {
     (): PowerContext => ({ fuels: this.fuels(), floors: this.floors() }),
   );
 
-  readonly staleTabs = computed(() => {
+  /**
+   * Results as of the last finished update, so the page holds still while
+   * tabs are solved in the background and then changes once. Tabs and their
+   * settings are always current.
+   */
+  private readonly frozen = signal<{
+    state: BaseState;
+    floors: Record<string, number>;
+  } | null>(null);
+
+  /** The base to show: settings as edited, numbers as last settled */
+  readonly view = computed((): BaseState | undefined => {
     const state = this.state();
+    const frozen = this.frozen()?.state;
+    if (!state || !frozen) return state;
+    const applied = new Map(frozen.tabs.map((t) => [t.id, t.applied]));
+    return {
+      ...state,
+      imports: frozen.imports,
+      summaries: frozen.summaries,
+      tabs: state.tabs.map((t) => ({ ...t, applied: applied.get(t.id) })),
+    };
+  });
+
+  /** Power context matching `view` */
+  readonly viewPower = computed(
+    (): PowerContext => ({
+      fuels: this.fuels(),
+      floors: this.frozen()?.floors ?? this.floors(),
+    }),
+  );
+
+  readonly staleTabs = computed(() => {
+    const state = this.view();
     const rocket = this.rocketCost();
-    const power = this.power();
+    const power = this.viewPower();
     if (!state) return new Set<string>();
     return new Set(
       state.tabs
@@ -209,6 +240,8 @@ export class Base {
   private passes = 0;
   /** Tab switches waiting for the background update to step aside */
   private opening = 0;
+  /** Page query when the open tab was solved in the hidden copy */
+  private liveBefore: string | undefined;
 
   constructor() {
     // A base belongs to one game; switching game closes it
@@ -590,6 +623,7 @@ export class Base {
     this.opening++;
     return this.exclusive(async () => {
       this.opening--;
+      this.liveBefore = undefined;
       this.library.flush();
       if (id === OVERVIEW) {
         this.tab.set(OVERVIEW);
@@ -623,29 +657,45 @@ export class Base {
     }
     this.running = true;
     this.again = false;
+    const state = this.state();
+    if (state && !this.frozen())
+      this.frozen.set({ state, floors: this.floors() });
     void this.exclusive(async () => {
       try {
         await this.processAll();
+        if (!this.again) await this.refreshLive();
         this.error.set(null);
       } catch (err) {
         this.error.set(String(err));
       } finally {
-        this.working.set(null);
         this.running = false;
       }
       // Run again behind any tab switch that queued up meanwhile
       if (this.again) this.schedule();
+      else {
+        this.working.set(null);
+        this.frozen.set(null);
+      }
     });
+  }
+
+  /** Shows the open tab's updated build, unless it was edited meanwhile */
+  private async refreshLive(): Promise<void> {
+    const before = this.liveBefore;
+    this.liveBefore = undefined;
+    const build = this.findTab(this.tab())?.build;
+    if (before == null || !build || this.library.query() !== before) return;
+    await this.showLive(build);
   }
 
   /** Updates tabs until no exports change; tabs may supply each other */
   private async processAll(): Promise<void> {
-    for (let pass = 0; pass < MAX_PASSES; pass++) {
+    for (;;) {
       const state = this.state();
       if (!state) return;
       const todo = tabsToProcess(state, this.rocketCost(), this.power());
       if (!todo.length) return;
-      if (++this.passes > MAX_TOTAL_PASSES) {
+      if (++this.passes > MAX_PASSES) {
         this.stuck.set(this.describeStale(state, todo));
         return;
       }
@@ -655,9 +705,20 @@ export class Base {
           return;
         }
         this.working.set(tabLabel(tab));
-        if (tab.id === this.tab() && tab.build)
+        // The open tab is solved out of sight too, unless it has edits that
+        // are not saved yet, and shown once everything has settled
+        const live = this.library.query();
+        if (
+          tab.id === this.tab() &&
+          tab.build &&
+          this.liveBefore == null &&
+          live !== this.savedQuery(tab.build)
+        )
           await this.reconcileLive(tab.id, tab.build);
-        else await this.processHidden(tab);
+        else {
+          if (tab.id === this.tab()) this.liveBefore ??= live;
+          await this.processHidden(tab);
+        }
       }
     }
   }

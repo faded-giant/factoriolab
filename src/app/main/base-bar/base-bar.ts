@@ -230,7 +230,7 @@ export class BaseBar {
 
   /** Saved builds not yet in the base */
   readonly addOptions = computed((): Option[] => {
-    const builds = new Set(this.base.state()?.tabs.map((t) => t.build));
+    const builds = new Set(this.base.view()?.tabs.map((t) => t.build));
     return this.library.options().filter((o) => !builds.has(o.value));
   });
 
@@ -238,7 +238,7 @@ export class BaseBar {
   protected readonly addKey = computed(() => this.addOptions().length);
 
   readonly rows = computed((): OverviewRow[] => {
-    const state = this.base.state();
+    const state = this.base.view();
     if (!state) return [];
     const stale = this.base.staleTabs();
     const names = this.buildNames();
@@ -289,9 +289,9 @@ export class BaseBar {
   });
 
   readonly powerRows = computed((): PowerTabRow[] => {
-    const state = this.base.state();
+    const state = this.base.view();
     if (!state) return [];
-    const power = this.base.power();
+    const power = this.base.viewPower();
     return state.tabs
       .filter((t) => t.build != null)
       .map((tab) => {
@@ -377,7 +377,7 @@ export class BaseBar {
 
   /** Changes after each add, so the add selects reset */
   protected readonly powerKey = computed(() =>
-    (this.base.state()?.tabs ?? []).map((t) => tabPowers(t).length).join(),
+    (this.base.view()?.tabs ?? []).map((t) => tabPowers(t).length).join(),
   );
 
   setShare(id: string, index: number, text: string): void {
@@ -389,7 +389,7 @@ export class BaseBar {
   }
 
   readonly warnings = computed((): string[] => {
-    const state = this.base.state();
+    const state = this.base.view();
     if (!state) return [];
     const label = (id: string): string => {
       const tab = state.tabs.find((t) => t.id === id);
@@ -453,7 +453,8 @@ export class BaseBar {
   /** Generators of all a tab's power sources, same buildings added up */
   private generators(state: BaseState, id: string): OverviewItem[] {
     const counts = new Map<string, number>();
-    for (const source of powerPlan(state, id, this.base.power())?.sources ?? [])
+    for (const source of powerPlan(state, id, this.base.viewPower())?.sources ??
+      [])
       for (const b of source.buildings)
         counts.set(b.itemId, (counts.get(b.itemId) ?? 0) + b.count);
     return [...counts].map(([itemId, n]) => ({

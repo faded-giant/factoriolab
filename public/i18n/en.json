@@ -89,6 +89,7 @@
     "via": "Via platform…",
     "waitSeconds": "Wait (s)",
     "working": "Updating {{ name }}…",
+    "updating": "Updating…",
     "powerHeader": "Power",
     "powerHelp": "Plan each tab's generators. Use several sources with a share each: a percentage, a fixed MW, or leave it blank for the rest. Fuel for the generators is added to the build, so making it is counted too.",
     "powerSourceLabel": "Source",
