@@ -11,7 +11,7 @@ import {
   TabSummary,
 } from '~/state/preferences/base-state';
 
-import { powerDemands } from './power';
+import { PowerContext, powerDemands } from './power';
 
 /** Pure calculations for linking builds in a base, kept free of Angular */
 
@@ -98,13 +98,13 @@ export function launchesFor(base: BaseState, id: string): Rational {
 /**
  * Item id -> items per second tab `id` has to make beyond its own objectives:
  * its exports, the rocket parts to launch them, and fuel for its generators.
- * `fuels` is item id -> MJ, for heating towers.
+ * `power` holds what planning its generators needs.
  */
 export function demandsFor(
   base: BaseState,
   id: string,
   rocket?: RocketCost,
-  fuels?: Record<string, number>,
+  power?: PowerContext,
 ): Record<string, Rational> {
   const result = exportsFor(base, id);
   const add = (itemId: string, rate: Rational): void => {
@@ -114,7 +114,7 @@ export function demandsFor(
     const parts = launchesFor(base, id).mul(rocket.parts);
     if (parts.nonzero()) add(rocket.itemId, parts);
   }
-  for (const [itemId, rate] of Object.entries(powerDemands(base, id, fuels)))
+  for (const [itemId, rate] of Object.entries(powerDemands(base, id, power)))
     add(itemId, rate);
   return result;
 }
@@ -124,11 +124,11 @@ export function isStale(
   base: BaseState,
   id: string,
   rocket?: RocketCost,
-  fuels?: Record<string, number>,
+  power?: PowerContext,
 ): boolean {
   const tab = base.tabs.find((t) => t.id === id);
   if (!tab) return false;
-  const exports = demandsFor(base, id, rocket, fuels);
+  const exports = demandsFor(base, id, rocket, power);
   const applied = tab.applied ?? {};
   const ids = new Set([...Object.keys(exports), ...Object.keys(applied)]);
   for (const id of ids) {
@@ -278,11 +278,11 @@ export function baseWarnings(base: BaseState): BaseWarning[] {
 export function tabsToProcess(
   base: BaseState,
   rocket?: RocketCost,
-  fuels?: Record<string, number>,
+  power?: PowerContext,
 ): BaseTab[] {
   return base.tabs.filter(
     (t) =>
-      isStale(base, t.id, rocket, fuels) ||
+      isStale(base, t.id, rocket, power) ||
       (t.build != null && !base.summaries?.[t.id]),
   );
 }

@@ -291,11 +291,11 @@ export class BaseBar {
   readonly powerRows = computed((): PowerTabRow[] => {
     const state = this.base.state();
     if (!state) return [];
-    const fuels = this.base.fuels();
+    const power = this.base.power();
     return state.tabs
       .filter((t) => t.build != null)
       .map((tab) => {
-        const plan = powerPlan(state, tab.id, fuels);
+        const plan = powerPlan(state, tab.id, power);
         const kW = state.summaries?.[tab.id]?.power;
         const mw = (n: number): string => `${Number(n.toFixed(1))} MW`;
         return {
@@ -453,7 +453,7 @@ export class BaseBar {
   /** Generators of all a tab's power sources, same buildings added up */
   private generators(state: BaseState, id: string): OverviewItem[] {
     const counts = new Map<string, number>();
-    for (const source of powerPlan(state, id, this.base.fuels())?.sources ?? [])
+    for (const source of powerPlan(state, id, this.base.power())?.sources ?? [])
       for (const b of source.buildings)
         counts.set(b.itemId, (counts.get(b.itemId) ?? 0) + b.count);
     return [...counts].map(([itemId, n]) => ({

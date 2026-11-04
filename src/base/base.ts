@@ -54,6 +54,8 @@ import {
   DEFAULT_FUEL,
   DEFAULT_POWER_QUALITY,
   HEAT_MACHINES,
+  PowerContext,
+  powerPlan,
   tabPowers,
 } from './power';
 
@@ -149,15 +151,22 @@ export class Base {
     return result;
   });
 
+  /** MW each tab's generators are planned for, at least; see PowerContext */
+  private readonly floors = signal<Record<string, number>>({});
+
+  readonly power = computed(
+    (): PowerContext => ({ fuels: this.fuels(), floors: this.floors() }),
+  );
+
   readonly staleTabs = computed(() => {
     const state = this.state();
     const rocket = this.rocketCost();
-    const fuels = this.fuels();
+    const power = this.power();
     if (!state) return new Set<string>();
     return new Set(
       state.tabs
         .map((t) => t.id)
-        .filter((id) => isStale(state, id, rocket, fuels)),
+        .filter((id) => isStale(state, id, rocket, power)),
     );
   });
 
@@ -190,6 +199,8 @@ export class Base {
   private lock: Promise<void> = Promise.resolve();
   private running = false;
   private again = false;
+  /** State as the background update or a tab switch last left it */
+  private ownState: BaseState | undefined;
 
   constructor() {
     // A base belongs to one game; switching game closes it
@@ -219,8 +230,13 @@ export class Base {
     effect(() => {
       const state = this.state();
       const rocket = this.rocketCost();
-      const fuels = this.fuels();
-      if (!state || this.busy() || !tabsToProcess(state, rocket, fuels).length)
+      // Anything else changed, so plans may shrink again
+      if (state !== this.ownState && Object.keys(untracked(this.floors)).length)
+        untracked(() => {
+          this.floors.set({});
+        });
+      const power = this.power();
+      if (!state || this.busy() || !tabsToProcess(state, rocket, power).length)
         return;
       untracked(() => {
         this.schedule();
@@ -571,7 +587,7 @@ export class Base {
         await this.showLive(build);
         this.tab.set(id);
         const state = this.state();
-        if (state && isStale(state, id, this.rocketCost(), this.fuels()))
+        if (state && isStale(state, id, this.rocketCost(), this.power()))
           await this.reconcileLive(id, build);
         this.capture(id, this.live());
       } catch (err) {
@@ -610,7 +626,7 @@ export class Base {
     for (let pass = 0; pass < MAX_PASSES; pass++) {
       const state = this.state();
       if (!state) return;
-      const todo = tabsToProcess(state, this.rocketCost(), this.fuels());
+      const todo = tabsToProcess(state, this.rocketCost(), this.power());
       if (!todo.length) return;
       for (const tab of todo) {
         this.working.set(tabLabel(tab));
@@ -698,7 +714,10 @@ export class Base {
     if (!state || !tab) return false;
 
     const store = solver.objectivesStore;
-    const exports = demandsFor(state, id, this.rocketCost(), this.fuels());
+    const exports = demandsFor(state, id, this.rocketCost(), this.power());
+    const planned = powerPlan(state, id, this.power())?.demand;
+    if (planned != null && planned > (this.floors()[id] ?? 0))
+      this.floors.update((f) => ({ ...f, [id]: planned }));
     const dispRate = solver.settingsStore.displayRateInfo().value;
     const objectives = (): ObjectiveState[] => Object.values(store.state());
     const plan = planReconcile(
@@ -824,5 +843,6 @@ export class Base {
       ...fn(state),
       updatedAt: Date.now(),
     });
+    if (this.running || this.busy()) this.ownState = this.state();
   }
 }

@@ -47,6 +47,18 @@ const FUSION_REACTOR = 100;
 const FUSION_REACTOR_DRAW = 10;
 const FUSION_GENERATOR = 50;
 
+/**
+ * What planning a tab's generators depends on besides the base: item id -> MJ
+ * for fuels, and per tab the least MW to plan for. The background update
+ * raises that floor as it goes and never lowers it, so a tab whose fuel use
+ * jumps around a threshold (two reactors vs four) settles on the larger plan
+ * instead of switching back and forth.
+ */
+export interface PowerContext {
+  fuels?: Record<string, number>;
+  floors?: Record<string, number>;
+}
+
 /** Day/night shape shared by all planets: day 50%, dusk and dawn 20% each */
 const SOLAR_AVERAGE = 0.7;
 /** Accumulator energy per panel, as a fraction of peak power x day length */
@@ -178,14 +190,18 @@ function sunlight(base: BaseState, tab: BaseTab): number | undefined {
 export function powerPlan(
   base: BaseState,
   id: string,
-  fuels: Record<string, number> = {},
+  context: PowerContext = {},
 ): TabPowerPlan | undefined {
   const tab = base.tabs.find((t) => t.id === id);
   const choices = tabPowers(tab);
   const kW = base.summaries?.[id]?.power;
   if (!tab || !choices.length || kW == null) return undefined;
 
-  const demand = demandMW(rational(kW).toNumber());
+  const demand = Math.max(
+    demandMW(rational(kW).toNumber()),
+    context.floors?.[id] ?? 0,
+  );
+  const fuels = context.fuels ?? {};
   const shares = choices.map(() => 0);
   let left = demand;
   choices.forEach((c, i) => {
@@ -333,10 +349,10 @@ function sourcePlan(
 export function powerDemands(
   base: BaseState,
   id: string,
-  fuels?: Record<string, number>,
+  context?: PowerContext,
 ): Record<string, Rational> {
   const result: Record<string, Rational> = {};
-  for (const { fuel } of powerPlan(base, id, fuels)?.sources ?? [])
+  for (const { fuel } of powerPlan(base, id, context)?.sources ?? [])
     if (fuel?.rate.nonzero())
       result[fuel.itemId] = (result[fuel.itemId] ?? rational.zero).add(
         fuel.rate,
