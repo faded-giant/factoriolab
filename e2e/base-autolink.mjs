@@ -362,7 +362,7 @@ try {
   );
   await sleep(500);
 
-  // Power: plan Nauvis with solar and nuclear in the Overview power table
+  // Power: plan Nauvis with solar and nuclear in the power panel on its tab
   const pick = async (selector, index, text) => {
     const opened = await evaluate(`(() => {
       const select = document.querySelectorAll(${JSON.stringify(selector)})[${index}];
@@ -376,12 +376,15 @@ try {
   const powerTable = () =>
     evaluate(`(() => {
       const tables = document.querySelectorAll('lab-base-bar table');
-      return tables[1]?.innerText ?? '';
+      return tables[0]?.innerText ?? '';
     })()`);
   const nauvisTab = async () =>
     (await savedBase()).tabs.find((t) => t.id === 'nauvis');
-  check('back to the overview', await click('lab-base-bar button', 'Overview'));
-  await sleep(2000);
+  check(
+    'opened Nauvis for power',
+    await click('lab-base-bar button', 'Nauvis'),
+  );
+  await sleep(6000);
   check('added solar to Nauvis', await pick(addSelect, 0, 'Solar panels'));
   await sleep(3000);
   let text = await powerTable();
@@ -440,7 +443,7 @@ try {
   check(
     'switched nuclear to steam turbines',
     await pick(
-      'lab-base-bar table:nth-of-type(2) tbody lab-select',
+      'lab-base-bar table tbody lab-select',
       2,
       'Steam turbines (steam made in the build)',
     ),

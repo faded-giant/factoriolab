@@ -143,181 +143,64 @@
     ></button>
   </div>
 
-  @if (base.tab() === OVERVIEW) {
-    <div class="px-1 pb-3 sm:px-3 lg:px-6 overflow-x-auto">
-      <table class="text-sm w-full">
-        <thead class="text-left text-gray-300">
-          <tr>
-            <th class="pe-3 py-1">{{ 'base.tab' | translate }}</th>
-            <th class="pe-3 py-1">{{ 'base.buildings' | translate }}</th>
-            <th class="pe-3 py-1">{{ 'base.power' | translate }}</th>
-            <th class="pe-3 py-1">{{ 'base.imports' | translate }}</th>
-            <th class="pe-3 py-1">{{ 'base.exports' | translate }}</th>
-            <th class="pe-3 py-1" labTooltip="base.rocketsTooltip">
-              {{ 'base.rockets' | translate }}
-            </th>
-            <th class="pe-3 py-1" labTooltip="base.silosTooltip">
-              {{ 'base.silos' | translate }}
-            </th>
-            <th class="pe-3 py-1">{{ 'base.lap' | translate }}</th>
-            <th class="pe-3 py-1" labTooltip="base.buffersTooltip">
-              {{ 'base.buffers' | translate }}
-            </th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (row of rows(); track row.id) {
-            <tr class="border-t border-gray-800 align-top">
-              <td class="pe-3 py-1">
-                <div class="gap-1 flex items-center">
-                  @if (row.location) {
-                    <lab-icon [value]="row.location" type="location"></lab-icon>
-                  }
-                  {{ row.label }}
-                  @if (row.missing) {
-                    <span class="text-complement-400"
-                      >({{ 'base.missing' | translate }})</span
-                    >
-                  } @else if (row.unused) {
-                    <span class="text-gray-400"
-                      >({{ 'base.unused' | translate }})</span
-                    >
-                  } @else if (row.stale) {
-                    <span class="text-complement-400"
-                      >({{ 'base.stale' | translate }})</span
-                    >
-                  }
-                </div>
-              </td>
-              <td class="pe-3 py-1">{{ row.buildings ?? '–' }}</td>
-              <td class="pe-3 py-1">{{ row.power ?? '–' }}</td>
-              <td class="pe-3 py-1">
-                @for (item of row.imports; track item.itemId) {
-                  <div class="gap-1 flex items-center">
-                    <lab-icon [value]="item.itemId" type="item"></lab-icon>
-                    {{ item.text }}
-                  </div>
-                } @empty {
-                  –
-                }
-              </td>
-              <td class="pe-3 py-1">
-                @for (item of row.exports; track item.itemId) {
-                  <div class="gap-1 flex items-center">
-                    <lab-icon [value]="item.itemId" type="item"></lab-icon>
-                    {{ item.text }}
-                  </div>
-                } @empty {
-                  –
-                }
-              </td>
-              <td class="pe-3 py-1">{{ row.rockets ?? '–' }}</td>
-              <td class="pe-3 py-1">
-                @if (row.silos; as silos) {
-                  <div class="font-semibold">{{ silos.total }}</div>
-                  @for (line of silos.lines; track $index) {
-                    <div class="text-xs text-gray-400">{{ line.text }}</div>
-                    @for (item of line.items; track item.itemId) {
-                      <div
-                        class="gap-1 ms-2 text-xs flex items-center text-gray-400"
-                      >
-                        <lab-icon [value]="item.itemId" type="item"></lab-icon>
-                        {{ item.text }}
-                      </div>
-                    }
-                  }
-                } @else {
-                  –
-                }
-              </td>
-              <td class="pe-3 py-1">
-                @if (row.lap) {
-                  <div>{{ row.lap }}</div>
-                  @if (row.cargo) {
-                    <div class="text-xs text-gray-400">{{ row.cargo }}</div>
-                  }
-                } @else {
-                  –
-                }
-              </td>
-              <td class="pe-3 py-1">
-                @for (b of row.buffers; track $index) {
-                  <div class="gap-1 flex items-center">
-                    <lab-icon [value]="b.itemId" type="item"></lab-icon>
-                    {{ b.text }}
-                  </div>
-                  <div class="text-xs mb-1 text-gray-400">{{ b.detail }}</div>
-                } @empty {
-                  –
-                }
-              </td>
-              <td class="py-1">
-                <button
-                  type="button"
-                  labButton
-                  size="small"
-                  [border]="false"
-                  [faIcon]="faXmark"
-                  labTooltip="base.removeTab"
-                  [attr.aria-label]="'base.removeTab' | translate"
-                  [disabled]="!!base.busy()"
-                  (click)="base.removeTab(row.id)"
-                ></button>
-              </td>
-            </tr>
+  @if (base.tab() !== OVERVIEW && !base.busy()) {
+    @if (tabPower(); as tab) {
+      <div class="px-1 pb-2 sm:px-3 lg:px-6 overflow-x-auto">
+        <div class="gap-2 flex flex-wrap items-center">
+          <button
+            type="button"
+            labButton
+            size="small"
+            [faIcon]="powerOpen() ? faChevronUp : faChevronDown"
+            [text]="'base.powerHeader'"
+            (click)="powerOpen.set(!powerOpen())"
+          ></button>
+          <span class="text-sm text-gray-300">{{ tab.demand ?? '–' }}</span>
+          @if (!powerOpen()) {
+            @for (src of tab.sources; track src.index) {
+              @for (b of src.buildings; track b.itemId) {
+                <span class="gap-1 text-xs flex items-center text-gray-400">
+                  <lab-icon [value]="b.itemId" type="item"></lab-icon>
+                  {{ b.text }}
+                </span>
+              }
+            }
           }
-        </tbody>
-      </table>
-
-      @if (powerRows().length) {
-        <h3 class="mt-4 mb-1 font-semibold text-gray-200">
-          {{ 'base.powerHeader' | translate }}
-        </h3>
-        <p class="mb-1 text-xs text-gray-400">
-          {{ 'base.powerHelp' | translate }}
-        </p>
-        <table class="text-sm w-full">
-          <thead class="text-left text-gray-300">
-            <tr>
-              <th class="pe-3 py-1">{{ 'base.tab' | translate }}</th>
-              <th class="pe-3 py-1">
-                {{ 'base.powerSourceLabel' | translate }}
-              </th>
-              <th class="pe-3 py-1">{{ 'base.powerQuality' | translate }}</th>
-              <th class="pe-3 py-1" labTooltip="base.powerShareTooltip">
-                {{ 'base.powerShare' | translate }}
-              </th>
-              <th class="pe-3 py-1">{{ 'base.powerCovers' | translate }}</th>
-              <th class="pe-3 py-1">{{ 'base.buildings' | translate }}</th>
-              <th class="pe-3 py-1">{{ 'base.powerFuel' | translate }}</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (tab of powerRows(); track tab.id) {
-              @for (src of tab.sources; track src.index; let first = $first) {
-                <tr
-                  class="align-top"
-                  [class.border-t]="first"
-                  [class.border-gray-800]="first"
-                >
-                  <td class="pe-3 py-1">
-                    @if (first) {
-                      <div class="gap-1 flex items-center">
-                        @if (tab.location) {
-                          <lab-icon
-                            [value]="tab.location"
-                            type="location"
-                          ></lab-icon>
-                        }
-                        {{ tab.label }}
-                      </div>
-                      <div class="text-xs text-gray-400">
-                        {{ tab.demand ?? '–' }}
-                      </div>
-                    }
-                  </td>
+          @if (tab.uncovered) {
+            <span class="text-xs text-complement-400">{{
+              'base.powerUncovered' | translate: { mw: tab.uncovered }
+            }}</span>
+          }
+        </div>
+        @if (powerOpen()) {
+          <p class="my-1 text-xs text-gray-400">
+            {{ 'base.powerHelp' | translate }}
+          </p>
+          <table class="text-sm w-full">
+            @if (tab.sources.length) {
+              <thead class="text-left text-gray-300">
+                <tr>
+                  <th class="pe-3 py-1">
+                    {{ 'base.powerSourceLabel' | translate }}
+                  </th>
+                  <th class="pe-3 py-1">
+                    {{ 'base.powerQuality' | translate }}
+                  </th>
+                  <th class="pe-3 py-1" labTooltip="base.powerShareTooltip">
+                    {{ 'base.powerShare' | translate }}
+                  </th>
+                  <th class="pe-3 py-1">
+                    {{ 'base.powerCovers' | translate }}
+                  </th>
+                  <th class="pe-3 py-1">{{ 'base.buildings' | translate }}</th>
+                  <th class="pe-3 py-1">{{ 'base.powerFuel' | translate }}</th>
+                  <th></th>
+                </tr>
+              </thead>
+            }
+            <tbody>
+              @for (src of tab.sources; track src.index) {
+                <tr class="border-t border-gray-800 align-top">
                   <td class="pe-3 py-1">
                     <lab-select
                       class="w-56"
@@ -415,52 +298,163 @@
                   </td>
                 </tr>
               }
-              <tr
-                class="align-top"
-                [class.border-t]="!tab.sources.length"
-                [class.border-gray-800]="!tab.sources.length"
-              >
-                <td class="pe-3 py-1">
-                  @if (!tab.sources.length) {
-                    <div class="gap-1 flex items-center">
-                      @if (tab.location) {
-                        <lab-icon
-                          [value]="tab.location"
-                          type="location"
-                        ></lab-icon>
-                      }
-                      {{ tab.label }}
-                    </div>
-                    <div class="text-xs text-gray-400">
-                      {{ tab.demand ?? '–' }}
-                    </div>
+              <tr class="border-t border-gray-800">
+                <td class="pe-3 py-1" colspan="7">
+                  @for (key of [powerKey()]; track key) {
+                    <lab-select
+                      class="w-56"
+                      placeholder="base.powerAdd"
+                      [options]="sourceOptions"
+                      [attr.aria-label]="'base.powerAdd' | translate"
+                      (valueChange)="
+                        $event && base.addPower(tab.id, $any($event))
+                      "
+                    ></lab-select>
                   }
                 </td>
-                <td class="pe-3 py-1" colspan="7">
-                  <div class="gap-2 flex flex-wrap items-center">
-                    @for (key of [powerKey()]; track key) {
-                      <lab-select
-                        class="w-56"
-                        placeholder="base.powerAdd"
-                        [options]="sourceOptions"
-                        [attr.aria-label]="'base.powerAdd' | translate"
-                        (valueChange)="
-                          $event && base.addPower(tab.id, $any($event))
-                        "
-                      ></lab-select>
-                    }
-                    @if (tab.uncovered) {
-                      <span class="text-xs text-complement-400">{{
-                        'base.powerUncovered' | translate: { mw: tab.uncovered }
-                      }}</span>
-                    }
-                  </div>
-                </td>
               </tr>
-            }
-          </tbody>
-        </table>
-      }
+            </tbody>
+          </table>
+        }
+      </div>
+    }
+  }
+
+  @if (base.tab() === OVERVIEW) {
+    <div class="px-1 pb-3 sm:px-3 lg:px-6 overflow-x-auto">
+      <table class="text-sm w-full">
+        <thead class="text-left text-gray-300">
+          <tr>
+            <th class="pe-3 py-1">{{ 'base.tab' | translate }}</th>
+            <th class="pe-3 py-1">{{ 'base.buildings' | translate }}</th>
+            <th class="pe-3 py-1">{{ 'base.power' | translate }}</th>
+            <th class="pe-3 py-1">{{ 'base.imports' | translate }}</th>
+            <th class="pe-3 py-1">{{ 'base.exports' | translate }}</th>
+            <th class="pe-3 py-1" labTooltip="base.rocketsTooltip">
+              {{ 'base.rockets' | translate }}
+            </th>
+            <th class="pe-3 py-1" labTooltip="base.silosTooltip">
+              {{ 'base.silos' | translate }}
+            </th>
+            <th class="pe-3 py-1">{{ 'base.lap' | translate }}</th>
+            <th class="pe-3 py-1" labTooltip="base.buffersTooltip">
+              {{ 'base.buffers' | translate }}
+            </th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of rows(); track row.id) {
+            <tr class="border-t border-gray-800 align-top">
+              <td class="pe-3 py-1">
+                <div class="gap-1 flex items-center">
+                  @if (row.location) {
+                    <lab-icon [value]="row.location" type="location"></lab-icon>
+                  }
+                  {{ row.label }}
+                  @if (row.missing) {
+                    <span class="text-complement-400"
+                      >({{ 'base.missing' | translate }})</span
+                    >
+                  } @else if (row.unused) {
+                    <span class="text-gray-400"
+                      >({{ 'base.unused' | translate }})</span
+                    >
+                  } @else if (row.stale) {
+                    <span class="text-complement-400"
+                      >({{ 'base.stale' | translate }})</span
+                    >
+                  }
+                </div>
+              </td>
+              <td class="pe-3 py-1">{{ row.buildings ?? '–' }}</td>
+              <td class="pe-3 py-1">
+                {{ row.power ?? '–' }}
+                @for (g of row.generators; track g.itemId) {
+                  <div class="gap-1 text-xs flex items-center text-gray-400">
+                    <lab-icon [value]="g.itemId" type="item"></lab-icon>
+                    {{ g.text }}
+                  </div>
+                }
+              </td>
+              <td class="pe-3 py-1">
+                @for (item of row.imports; track item.itemId) {
+                  <div class="gap-1 flex items-center">
+                    <lab-icon [value]="item.itemId" type="item"></lab-icon>
+                    {{ item.text }}
+                  </div>
+                } @empty {
+                  –
+                }
+              </td>
+              <td class="pe-3 py-1">
+                @for (item of row.exports; track item.itemId) {
+                  <div class="gap-1 flex items-center">
+                    <lab-icon [value]="item.itemId" type="item"></lab-icon>
+                    {{ item.text }}
+                  </div>
+                } @empty {
+                  –
+                }
+              </td>
+              <td class="pe-3 py-1">{{ row.rockets ?? '–' }}</td>
+              <td class="pe-3 py-1">
+                @if (row.silos; as silos) {
+                  <div class="font-semibold">{{ silos.total }}</div>
+                  @for (line of silos.lines; track $index) {
+                    <div class="text-xs text-gray-400">{{ line.text }}</div>
+                    @for (item of line.items; track item.itemId) {
+                      <div
+                        class="gap-1 ms-2 text-xs flex items-center text-gray-400"
+                      >
+                        <lab-icon [value]="item.itemId" type="item"></lab-icon>
+                        {{ item.text }}
+                      </div>
+                    }
+                  }
+                } @else {
+                  –
+                }
+              </td>
+              <td class="pe-3 py-1">
+                @if (row.lap) {
+                  <div>{{ row.lap }}</div>
+                  @if (row.cargo) {
+                    <div class="text-xs text-gray-400">{{ row.cargo }}</div>
+                  }
+                } @else {
+                  –
+                }
+              </td>
+              <td class="pe-3 py-1">
+                @for (b of row.buffers; track $index) {
+                  <div class="gap-1 flex items-center">
+                    <lab-icon [value]="b.itemId" type="item"></lab-icon>
+                    {{ b.text }}
+                  </div>
+                  <div class="text-xs mb-1 text-gray-400">{{ b.detail }}</div>
+                } @empty {
+                  –
+                }
+              </td>
+              <td class="py-1">
+                <button
+                  type="button"
+                  labButton
+                  size="small"
+                  [border]="false"
+                  [faIcon]="faXmark"
+                  labTooltip="base.removeTab"
+                  [attr.aria-label]="'base.removeTab' | translate"
+                  [disabled]="!!base.busy()"
+                  (click)="base.removeTab(row.id)"
+                ></button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
       @if (base.hasPlatforms()) {
         <lab-checkbox
           class="mt-2"

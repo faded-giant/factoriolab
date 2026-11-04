@@ -11,6 +11,8 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
+  faChevronDown,
+  faChevronUp,
   faExclamationTriangle,
   faLink,
   faPencil,
@@ -84,6 +86,8 @@ interface OverviewRow {
   imports: OverviewItem[];
   exports: OverviewItem[];
   rockets?: string;
+  /** Planned generators, summed over the tab's power sources */
+  generators: OverviewItem[];
   /** Silos to build, with how that number was reached */
   silos?: { total: number; lines: SiloLine[] };
   /** For platforms */
@@ -165,6 +169,8 @@ export class BaseBar {
   protected readonly faRoute = faRoute;
   protected readonly faTrash = faTrash;
   protected readonly faXmark = faXmark;
+  protected readonly faChevronDown = faChevronDown;
+  protected readonly faChevronUp = faChevronUp;
   protected readonly tabLabel = tabLabel;
 
   /** Id of the tab being renamed */
@@ -265,6 +271,7 @@ export class BaseBar {
             text: `${this.itemName(itemId)} ${perMinute(rate)}`,
           }),
         ),
+        generators: this.generators(state, tab.id),
         rockets: rockets.nonzero()
           ? `${Number(rockets.toNumber().toFixed(2))}/min`
           : undefined,
@@ -321,6 +328,12 @@ export class BaseBar {
         };
       });
   });
+
+  /** Power plan of the open tab */
+  readonly tabPower = computed(() =>
+    this.powerRows().find((r) => r.id === this.base.tab()),
+  );
+  protected readonly powerOpen = signal(true);
 
   readonly sourceOptions: Option[] = POWER_SOURCES.map((s) => ({
     label: `base.powerSource.${s}`,
@@ -415,6 +428,18 @@ export class BaseBar {
     for (const p of plan.unknown)
       line(`${labels.get(p) ?? p}: no lap time yet`);
     return { total: plan.total, lines };
+  }
+
+  /** Generators of all a tab's power sources, same buildings added up */
+  private generators(state: BaseState, id: string): OverviewItem[] {
+    const counts = new Map<string, number>();
+    for (const source of powerPlan(state, id, this.base.fuels())?.sources ?? [])
+      for (const b of source.buildings)
+        counts.set(b.itemId, (counts.get(b.itemId) ?? 0) + b.count);
+    return [...counts].map(([itemId, n]) => ({
+      itemId,
+      text: `${this.itemName(itemId)} × ${n.toLocaleString()}`,
+    }));
   }
 
   private bufferRow(b: BufferLine, labels: Map<string, string>): BufferRow {
