@@ -216,7 +216,7 @@
                     <div class="mt-1 w-56 text-xs text-gray-400">
                       {{ 'base.powerNote.' + src.source | translate }}
                     </div>
-                    @if (src.source === 'heating-tower') {
+                    @if (src.burns) {
                       <lab-select
                         class="mt-1 w-56"
                         [options]="fuelOptions()"

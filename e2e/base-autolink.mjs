@@ -456,6 +456,30 @@ try {
       nauvis.applied?.['uranium-fuel-cell'] == null,
     JSON.stringify(nauvis.applied),
   );
+  check(
+    'switched turbines to boilers',
+    await pick(
+      'lab-base-bar table tbody lab-select',
+      2,
+      'Steam engines and boilers',
+    ),
+  );
+  await sleep(2000);
+  check(
+    'picked rocket fuel for the boilers',
+    await pick('lab-base-bar table tbody lab-select', 3, 'Rocket fuel'),
+  );
+  await sleep(12000);
+  nauvis = await nauvisTab();
+  text = await powerTable();
+  check(
+    'boilers burn rocket fuel, made in the build',
+    nauvis.applied?.['rocket-fuel'] != null &&
+      nauvis.applied?.['steam-165'] == null &&
+      nauvis.applied?.steam == null &&
+      /Boiler × \d+/.test(text),
+    JSON.stringify(nauvis.applied),
+  );
   for (let n = 0; n < 2; n++) {
     await click('lab-base-bar button', 'Remove power source');
     await sleep(1500);

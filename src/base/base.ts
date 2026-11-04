@@ -50,8 +50,9 @@ import {
 } from './base-logic';
 import { Headless } from './headless';
 import {
+  BURNER_SOURCES,
+  DEFAULT_FUEL,
   DEFAULT_POWER_QUALITY,
-  DEFAULT_TOWER_FUEL,
   HEAT_MACHINES,
   tabPowers,
 } from './power';
@@ -525,7 +526,7 @@ export class Base {
   addPower(id: string, source: PowerSource): void {
     const tab = this.state()?.tabs.find((t) => t.id === id);
     const power: TabPower = { source, quality: DEFAULT_POWER_QUALITY };
-    if (source === 'heating-tower') power.fuel = DEFAULT_TOWER_FUEL;
+    if (BURNER_SOURCES.has(source)) power.fuel = DEFAULT_FUEL;
     this.updateTab(id, { power: [...tabPowers(tab), power] });
   }
 
@@ -536,7 +537,7 @@ export class Base {
       const next: TabPower = { ...p, ...change };
       for (const key of Object.keys(next) as (keyof TabPower)[])
         if (next[key] === undefined) delete next[key];
-      if (next.source === 'heating-tower') next.fuel ??= DEFAULT_TOWER_FUEL;
+      if (BURNER_SOURCES.has(next.source)) next.fuel ??= DEFAULT_FUEL;
       else delete next.fuel;
       return next;
     });

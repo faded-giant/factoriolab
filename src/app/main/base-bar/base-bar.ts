@@ -32,6 +32,7 @@ import {
   tabLabel,
 } from '~/base/base-logic';
 import {
+  BURNER_SOURCES,
   DEFAULT_POWER_QUALITY,
   parseShare,
   POWER_SOURCES,
@@ -101,6 +102,8 @@ interface PowerSourceRow {
   source: PowerSource;
   quality: number;
   fuel?: string;
+  /** Whether the user picks what it burns */
+  burns: boolean;
   share: string;
   /** MW covered */
   covers: string;
@@ -309,6 +312,7 @@ export class BaseBar {
               source: p.source,
               quality: p.quality ?? DEFAULT_POWER_QUALITY,
               fuel: p.fuel,
+              burns: BURNER_SOURCES.has(p.source),
               share: shareText(p),
               covers: s ? mw(s.demand) : '–',
               buildings: (s?.buildings ?? []).map((b) => ({

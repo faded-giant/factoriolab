@@ -111,14 +111,14 @@
     "powerProblem": {
       "noRoute": "Give the platform a route first: panels are sized for the dimmest stop",
       "noSun": "No sunlight here",
-      "noFuel": "That item is not a fuel"
+      "noFuel": "Pick a fuel"
     },
     "powerRows": "Reactors in two rows, so each gets the neighbour bonus",
     "powerNote": {
       "solar": "Panels average 70% of their peak over a day; accumulators carry the night. Platforms are always lit, sized for the dimmest stop.",
-      "steam-engine": "The build makes 165° steam with boilers, burning its chosen fuel.",
+      "steam-engine": "Boilers burn the fuel you pick, two engines each. The build makes the fuel; exclude it there to import it instead.",
       "steam-turbine": "The build makes 500° steam, e.g. acid neutralisation on Vulcanus. Change the steam recipe in the build if needed.",
-      "heating-tower": "Towers turn fuel into 2.5x heat, with no neighbour bonus. Fuel is for the power used, not full output.",
+      "heating-tower": "Towers turn fuel into 2.5x heat, with no neighbour bonus. The build makes the fuel; exclude it there to import it instead.",
       "nuclear": "Fuel is for the power used, not full output. Water for the heat exchangers is not counted.",
       "fusion": "Each reactor also draws power itself, which is included. Fuel is for the power used; the fluoroketone loop is not counted."
     },

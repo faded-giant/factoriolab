@@ -33,6 +33,9 @@ export const SOLAR: Record<
 const SOLAR_PANEL = 0.06;
 const ACCUMULATOR_MJ = 5;
 const STEAM_ENGINE = 0.9;
+/** Boiler heat, enough for two engines */
+const BOILER = 1.8;
+const BOILER_EFFECTIVITY = 1;
 const STEAM_TURBINE = 5.82;
 const HEAT_EXCHANGER = 10;
 const NUCLEAR_REACTOR = 40;
@@ -50,12 +53,8 @@ const SOLAR_AVERAGE = 0.7;
 const SOLAR_NIGHT = 0.168;
 
 /** Steam items, and MJ each holds for a generator */
-export const STEAM_165 = 'steam-165';
 export const STEAM_500 = 'steam';
-const STEAM_MJ: Record<string, number> = {
-  [STEAM_165]: 0.03,
-  [STEAM_500]: 0.097,
-};
+const STEAM_MJ: Record<string, number> = { [STEAM_500]: 0.097 };
 export const URANIUM_FUEL_CELL = 'uranium-fuel-cell';
 const URANIUM_FUEL_CELL_MJ = 8000;
 export const FUSION_POWER_CELL = 'fusion-power-cell';
@@ -83,7 +82,13 @@ export const QUALITY_LEVELS: { level: number; id: string }[] = [
 
 /** New choices default to legendary, like new builds */
 export const DEFAULT_POWER_QUALITY = 5;
-export const DEFAULT_TOWER_FUEL = 'solid-fuel';
+export const DEFAULT_FUEL = 'solid-fuel';
+
+/** Sources that burn a fuel the user picks */
+export const BURNER_SOURCES = new Set<PowerSource>([
+  'steam-engine',
+  'heating-tower',
+]);
 
 export function qualityMultiplier(level: number): number {
   return 1 + 0.3 * level;
@@ -217,6 +222,14 @@ function sourcePlan(
   if (demand <= 0) return plan;
   const perSecond = (n: number): Rational =>
     rational(BigInt(Math.ceil(n * 1e6 - 1e-6)), 1000000n);
+  /** Fuel for burning `demand` MW at `effectivity`; false if not a fuel */
+  const burn = (effectivity: number): boolean => {
+    const fuel = choice.fuel ?? DEFAULT_FUEL;
+    const mj = fuels[fuel];
+    if (!mj) return false;
+    plan.fuel = { itemId: fuel, rate: perSecond(demand / effectivity / mj) };
+    return true;
+  };
   const steam = (itemId: string): void => {
     plan.fuel = { itemId, rate: perSecond(demand / STEAM_MJ[itemId]) };
   };
@@ -246,13 +259,14 @@ function sourcePlan(
       );
       break;
     }
-    case 'steam-engine':
-      plan.buildings.push({
-        itemId: 'steam-engine',
-        count: count(demand, STEAM_ENGINE * q),
-      });
-      steam(STEAM_165);
+    case 'steam-engine': {
+      plan.buildings.push(
+        { itemId: 'boiler', count: count(demand, BOILER * q) },
+        { itemId: 'steam-engine', count: count(demand, STEAM_ENGINE * q) },
+      );
+      if (!burn(BOILER_EFFECTIVITY)) return { ...plan, problem: 'noFuel' };
       break;
+    }
     case 'steam-turbine':
       plan.buildings.push({
         itemId: 'steam-turbine',
@@ -261,18 +275,13 @@ function sourcePlan(
       steam(STEAM_500);
       break;
     case 'heating-tower': {
-      const fuel = choice.fuel ?? DEFAULT_TOWER_FUEL;
-      const mj = fuels[fuel];
       plan.buildings.push(
         { itemId: 'heating-tower', count: count(demand, HEATING_TOWER * q) },
         { itemId: 'heat-exchanger', count: count(demand, HEAT_EXCHANGER * q) },
         { itemId: 'steam-turbine', count: count(demand, STEAM_TURBINE * q) },
       );
-      if (!mj) return { ...plan, problem: 'noFuel' };
-      plan.fuel = {
-        itemId: fuel,
-        rate: perSecond(demand / HEATING_TOWER_EFFECTIVITY / mj),
-      };
+      if (!burn(HEATING_TOWER_EFFECTIVITY))
+        return { ...plan, problem: 'noFuel' };
       break;
     }
     case 'nuclear': {
