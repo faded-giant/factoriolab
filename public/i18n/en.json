@@ -30,6 +30,7 @@
     "deleteTabMessage": "The tab and its links are removed. Its build stays in your library.",
     "discardChanges": "Discard",
     "error": "Background update failed (hover for details)",
+    "stuck": "Stopped updating: tabs keep changing each other (hover for details)",
     "exports": "Exports",
     "importFrom": "Import from…",
     "imports": "Imports",

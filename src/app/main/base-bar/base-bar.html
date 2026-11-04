@@ -109,6 +109,11 @@
         'base.working' | translate: { name: name }
       }}</span>
     }
+    @if (base.stuck(); as stuck) {
+      <span class="mx-1 text-sm text-complement-400" [title]="stuck">{{
+        'base.stuck' | translate
+      }}</span>
+    }
     @if (base.error(); as error) {
       <span class="mx-1 text-sm text-complement-400" [title]="error">{{
         'base.error' | translate

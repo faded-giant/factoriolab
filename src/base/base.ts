@@ -75,6 +75,8 @@ interface DemoBuild {
 }
 const ROCKET_PART = 'rocket-part';
 const MAX_PASSES = 8;
+/** Passes after which tabs that keep changing each other are left alone */
+const MAX_TOTAL_PASSES = 24;
 
 function waitFor(source: Observable<unknown>, ms: number): Promise<boolean> {
   return firstValueFrom(
@@ -128,6 +130,8 @@ export class Base {
   /** Label of the tab being updated in the background */
   readonly working = signal<string | null>(null);
   readonly error = signal<string | null>(null);
+  /** Tabs and items still changing when the update gave up, if it did */
+  readonly stuck = signal<string | null>(null);
 
   /** What launching one rocket takes, if the game has rockets */
   readonly rocketCost = computed((): RocketCost | undefined => {
@@ -201,6 +205,10 @@ export class Base {
   private again = false;
   /** State as the background update or a tab switch last left it */
   private ownState: BaseState | undefined;
+  /** Background passes since anything else changed */
+  private passes = 0;
+  /** Tab switches waiting for the background update to step aside */
+  private opening = 0;
 
   constructor() {
     // A base belongs to one game; switching game closes it
@@ -231,12 +239,19 @@ export class Base {
       const state = this.state();
       const rocket = this.rocketCost();
       // Anything else changed, so plans may shrink again
-      if (state !== this.ownState && Object.keys(untracked(this.floors)).length)
+      if (state !== this.ownState)
         untracked(() => {
-          this.floors.set({});
+          this.passes = 0;
+          this.stuck.set(null);
+          if (Object.keys(this.floors()).length) this.floors.set({});
         });
       const power = this.power();
-      if (!state || this.busy() || !tabsToProcess(state, rocket, power).length)
+      if (
+        !state ||
+        this.busy() ||
+        untracked(this.stuck) ||
+        !tabsToProcess(state, rocket, power).length
+      )
         return;
       untracked(() => {
         this.schedule();
@@ -572,7 +587,9 @@ export class Base {
 
   /** Opens a tab, creating its build first if it is a new planet tab */
   select(id: string): Promise<void> {
+    this.opening++;
     return this.exclusive(async () => {
+      this.opening--;
       this.library.flush();
       if (id === OVERVIEW) {
         this.tab.set(OVERVIEW);
@@ -605,12 +622,10 @@ export class Base {
       return;
     }
     this.running = true;
+    this.again = false;
     void this.exclusive(async () => {
       try {
-        do {
-          this.again = false;
-          await this.processAll();
-        } while (this.again);
+        await this.processAll();
         this.error.set(null);
       } catch (err) {
         this.error.set(String(err));
@@ -618,6 +633,8 @@ export class Base {
         this.working.set(null);
         this.running = false;
       }
+      // Run again behind any tab switch that queued up meanwhile
+      if (this.again) this.schedule();
     });
   }
 
@@ -628,13 +645,45 @@ export class Base {
       if (!state) return;
       const todo = tabsToProcess(state, this.rocketCost(), this.power());
       if (!todo.length) return;
+      if (++this.passes > MAX_TOTAL_PASSES) {
+        this.stuck.set(this.describeStale(state, todo));
+        return;
+      }
       for (const tab of todo) {
+        if (this.opening) {
+          this.again = true;
+          return;
+        }
         this.working.set(tabLabel(tab));
         if (tab.id === this.tab() && tab.build)
           await this.reconcileLive(tab.id, tab.build);
         else await this.processHidden(tab);
       }
     }
+  }
+
+  /** What each tab is asked for against what its build last applied */
+  private describeStale(state: BaseState, tabs: BaseTab[]): string {
+    const data = this.settingsStore.dataset();
+    const perMin = (r: Rational): string =>
+      Number(r.mul(rational(60n)).toNumber().toPrecision(4)).toString();
+    return tabs
+      .map((tab) => {
+        const want = demandsFor(state, tab.id, this.rocketCost(), this.power());
+        const applied = tab.applied ?? {};
+        const had = (i: string): Rational =>
+          applied[i] != null ? rational(applied[i]) : rational.zero;
+        const ids = new Set([...Object.keys(want), ...Object.keys(applied)]);
+        const items = [...ids]
+          .filter((i) => !(want[i] ?? rational.zero).eq(had(i)))
+          .map((i) => {
+            const was = perMin(had(i));
+            const now = perMin(want[i] ?? rational.zero);
+            return `${data.itemRecord[i]?.name ?? i} ${was} → ${now}/min`;
+          });
+        return `${tabLabel(tab)}: ${items.join(', ') || 'never solved'}`;
+      })
+      .join('; ');
   }
 
   /** Brings a tab that is not on screen up to date, in the hidden copy */
