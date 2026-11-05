@@ -183,10 +183,21 @@ try {
     pageText.includes('to hold 1 rocket for Shuttle'),
     pageText.match(/.*rocket.*for.*/)?.[0],
   );
+  const exportSilos = await evaluate(`(() => {
+    const silo = [...document.querySelectorAll('lab-base-bar tbody td')]
+      .filter((td) => td.innerText.includes('Holmium plate'))
+      .map((td) => td.querySelector('lab-icon[value="rocket-silo"]'))
+      .find((icon) => icon);
+    return silo ? silo.parentElement.innerText.trim() : null;
+  })()`);
   check(
-    'silo buffer is broken down by item',
-    /to hold 1 rocket for Shuttle\s*Holmium plate 1\b/.test(pageText),
-    pageText.match(/.*rocket.*for.*\n.*/)?.[0],
+    'export shows its silos with the silo icon',
+    exportSilos === '1',
+    String(exportSilos),
+  );
+  check(
+    'silo column no longer repeats the items',
+    !/to hold 1 rocket for Shuttle\s*Holmium plate/.test(pageText),
   );
   check(
     'overview shows cargo per lap',
@@ -391,6 +402,24 @@ try {
   };
   const nauvisTab = async () =>
     (await savedBase()).tabs.find((t) => t.id === 'nauvis');
+  // On Fulgora's own steps, the exported holmium goes to its silo
+  check('opened Fulgora', await click('lab-base-bar button', 'Fulgora'));
+  await sleep(6000);
+  const expanded = await evaluate(`(() => {
+    const buttons = document.querySelectorAll('button[aria-label="Show details"]');
+    buttons.forEach((b) => b.click());
+    return buttons.length;
+  })()`);
+  await sleep(1500);
+  const silosText = await evaluate(`(() =>
+    [...document.querySelectorAll('[labtooltip="steps.exportSilosTooltip"], span')]
+      .map((e) => e.textContent.trim())
+      .find((t) => /^\\d+ silos?$/.test(t)) ?? null)()`);
+  check(
+    'Fulgora steps send holmium to "1 silo"',
+    silosText === '1 silo',
+    `${expanded} expanded, found ${silosText}`,
+  );
   check(
     'opened Nauvis for power',
     await click('lab-base-bar button', 'Nauvis'),

@@ -46,8 +46,10 @@ import {
   BufferLine,
   buffers,
   carriedBy,
+  itemSilos,
   lapMinutes,
   routeWarnings,
+  SiloPlan,
   siloPlan,
   SPACE_LOCATIONS,
   spoilWarnings,
@@ -72,6 +74,8 @@ import { BaseRouteDialog } from '../base-route-dialog/base-route-dialog';
 interface OverviewItem {
   itemId: string;
   text: string;
+  /** Silos an export needs to keep its platforms' rockets ready */
+  silos?: string;
 }
 
 interface OverviewRow {
@@ -125,8 +129,6 @@ interface PowerTabRow {
 
 interface SiloLine {
   text: string;
-  /** Silos each item needs for this line, most first */
-  items: OverviewItem[];
 }
 
 interface BufferRow {
@@ -249,6 +251,8 @@ export class BaseBar {
       const summary = state.summaries?.[tab.id];
       const imports = state.imports?.[tab.id] ?? {};
       const rockets = launchesFor(state, tab.id).mul(rational(60n));
+      const silos = siloPlan(state, tab.id);
+      const exportSilos = itemSilos(silos);
 
       const power = summary
         ? rational(summary.power).div(rational(1000n)).toNumber()
@@ -275,13 +279,14 @@ export class BaseBar {
           ([itemId, rate]) => ({
             itemId,
             text: `${this.itemName(itemId)} ${perMinute(rate)}`,
+            silos: exportSilos.get(itemId)?.toLocaleString(),
           }),
         ),
         generators: this.generators(state, tab.id),
         rockets: rockets.nonzero()
           ? `${Number(rockets.toNumber().toFixed(2))}/min`
           : undefined,
-        silos: this.silos(state, tab.id, labels),
+        silos: this.silos(silos, labels),
         buffers: (held[tab.id] ?? []).map((b) => this.bufferRow(b, labels)),
         ...this.lapAndCargo(state, tab.id),
       };
@@ -426,25 +431,19 @@ export class BaseBar {
   });
 
   private silos(
-    state: BaseState,
-    id: string,
+    plan: SiloPlan | undefined,
     labels: Map<string, string>,
   ): OverviewRow['silos'] {
-    const plan = siloPlan(state, id);
     if (!plan) return undefined;
     const lines: SiloLine[] = [];
     const line = (text: string): void => {
-      lines.push({ text, items: [] });
+      lines.push({ text });
     };
     if (plan.production) line(`${plan.production.toString()} to keep up`);
     for (const b of plan.buffers)
-      lines.push({
-        text: `${b.silos.toString()} to hold ${b.rockets.toString()} rocket${b.rockets === 1 ? '' : 's'} for ${labels.get(b.platform) ?? b.platform}`,
-        items: b.items.map((i) => ({
-          itemId: i.itemId,
-          text: `${this.itemName(i.itemId)} ${i.silos.toString()}`,
-        })),
-      });
+      line(
+        `${b.silos.toString()} to hold ${b.rockets.toString()} rocket${b.rockets === 1 ? '' : 's'} for ${labels.get(b.platform) ?? b.platform}`,
+      );
     for (const p of plan.unknown)
       line(`${labels.get(p) ?? p}: no lap time yet`);
     return { total: plan.total, lines };

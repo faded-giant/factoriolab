@@ -254,6 +254,15 @@ export function siloPlan(base: BaseState, id: string): SiloPlan | undefined {
   return { production, buffers, unknown, total };
 }
 
+/** Silos each exported item needs, over all the platforms collecting it */
+export function itemSilos(plan: SiloPlan | undefined): Map<string, number> {
+  const result = new Map<string, number>();
+  for (const b of plan?.buffers ?? [])
+    for (const i of b.items)
+      result.set(i.itemId, (result.get(i.itemId) ?? 0) + i.silos);
+  return result;
+}
+
 export type BufferKind = 'pickup' | 'dropoff' | 'carry';
 
 export interface BufferLine {

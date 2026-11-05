@@ -13,6 +13,7 @@ import {
   faInfoCircle,
 } from '@fortawesome/free-solid-svg-icons';
 
+import { Base } from '~/base/base';
 import { Icon } from '~/components/icon/icon';
 import { Select } from '~/components/select/select';
 import { Tooltip } from '~/components/tooltip/tooltip';
@@ -43,6 +44,7 @@ import { PercentPadPipe } from './percent-pad-pipe';
   host: { class: '*:bg-gray-950/75' },
 })
 export class DetailRow {
+  private readonly base = inject(Base);
   private readonly recipesStore = inject(RecipesStore);
   protected readonly settingsStore = inject(SettingsStore);
 
@@ -59,6 +61,13 @@ export class DetailRow {
     const factor = this.factor().ceil();
     if (factor.isZero()) return rational.one;
     return factor;
+  });
+
+  /** Silos this output is launched from, if a base tab exports it */
+  protected readonly silos = computed(() => {
+    const value = this.value();
+    if (!value.isOutput || value.itemId == null) return undefined;
+    return this.base.openSilos().get(value.itemId);
   });
 
   protected readonly items = computed(() =>

@@ -58,6 +58,7 @@ import {
   powerPlan,
   tabPowers,
 } from './power';
+import { itemSilos, siloPlan } from './route';
 
 export interface ActiveBase {
   modId: string;
@@ -192,6 +193,14 @@ export class Base {
       floors: this.frozen()?.floors ?? this.floors(),
     }),
   );
+
+  /** Silos each item the open tab exports needs, for its steps list */
+  readonly openSilos = computed(() => {
+    const state = this.view();
+    const id = this.tab();
+    if (!state || id === OVERVIEW) return new Map<string, number>();
+    return itemSilos(siloPlan(state, id));
+  });
 
   readonly staleTabs = computed(() => {
     const state = this.view();

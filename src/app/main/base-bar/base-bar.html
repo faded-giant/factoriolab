@@ -431,6 +431,15 @@
                   <div class="gap-1 flex items-center">
                     <lab-icon [value]="item.itemId" type="item"></lab-icon>
                     {{ item.text }}
+                    @if (item.silos; as silos) {
+                      <span
+                        class="gap-1 ms-2 flex items-center text-gray-400"
+                        labTooltip="base.exportSilosTooltip"
+                      >
+                        <span class="font-mono">{{ silos }}</span>
+                        <lab-icon value="rocket-silo" type="item"></lab-icon>
+                      </span>
+                    }
                   </div>
                 } @empty {
                   –
@@ -442,14 +451,6 @@
                   <div class="font-semibold">{{ silos.total }}</div>
                   @for (line of silos.lines; track $index) {
                     <div class="text-xs text-gray-400">{{ line.text }}</div>
-                    @for (item of line.items; track item.itemId) {
-                      <div
-                        class="gap-1 ms-2 text-xs flex items-center text-gray-400"
-                      >
-                        <lab-icon [value]="item.itemId" type="item"></lab-icon>
-                        {{ item.text }}
-                      </div>
-                    }
                   }
                 } @else {
                   –

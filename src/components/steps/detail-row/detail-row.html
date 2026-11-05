@@ -188,7 +188,18 @@
             [labTooltipType]="value().destType"
           ></lab-icon>
         }
-        @if (value().isOutput) {
+        @if (silos(); as silos) {
+          <span
+            class="gap-1 order-2 flex items-center"
+            labTooltip="steps.exportSilosTooltip"
+          >
+            <lab-icon class="mx-0.5" value="rocket-silo" type="item"></lab-icon>
+            {{
+              (silos === 1 ? 'steps.silo' : 'steps.silos')
+                | translate: { count: silos }
+            }}
+          </span>
+        } @else if (value().isOutput) {
           <span class="order-2">{{ 'steps.outputs' | translate }}</span>
         }
       </div>

@@ -3,7 +3,7 @@
 # auto-link end-to-end test. Chrome runs with all non-local traffic blocked.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-export NG_CLI_ANALYTICS=false NO_UPDATE_NOTIFIER=1 npm_config_update_notifier=false
+export NG_CLI_ANALYTICS=false NO_UPDATE_NOTIFIER=1 npm_config_update_notifier=false npm_config_offline=true
 export CHROME_BIN="${CHROME_BIN:-/usr/bin/google-chrome}"
 
 npx ng build --base-href /factoriolab/
