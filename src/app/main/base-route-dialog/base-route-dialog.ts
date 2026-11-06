@@ -178,18 +178,27 @@ export class BaseRouteDialog implements DialogData {
       this.route().stops.map((s, i) => {
         if (i !== index) return s;
         const { fill: _, ...rest } = s;
-        return on ? { ...rest, fill: { quality: 5, bays: 10 } } : rest;
+        return on ? { ...rest, fill: { collectors: 8, quality: 5 } } : rest;
       }),
     );
   }
 
+  /** Sets one fill setting; undefined clears the turn back to automatic */
   setFill(index: number, field: keyof RouteFill, n: number | undefined): void {
-    if (n == null) return;
+    if (n == null && field !== 'chunks') return;
     this.setStops(
-      this.route().stops.map((s, i) =>
-        i === index && s.fill ? { ...s, fill: { ...s.fill, [field]: n } } : s,
-      ),
+      this.route().stops.map((s, i) => {
+        if (i !== index || !s.fill) return s;
+        const fill: RouteFill = { ...s.fill, [field]: n };
+        if (fill.chunks == null) delete fill.chunks;
+        return { ...s, fill };
+      }),
     );
+  }
+
+  /** Number typed in a fill field, or undefined if blank or invalid */
+  fillValue(value: string): number | undefined {
+    return toNumber(value);
   }
 
   setSpeed(value: string): void {

@@ -104,7 +104,7 @@ interface OverviewRow {
   /** For platforms */
   lap?: string;
   cargo?: string;
-  /** Collectors and cargo condition of a gatherer */
+  /** Cargo condition of a gatherer */
   gather?: string;
   buffers: BufferRow[];
 }
@@ -523,10 +523,9 @@ export class BaseBar {
       cargo: stacks
         ? `${Math.ceil(stacks - 1e-9).toString()} stacks/lap`
         : undefined,
-      gather:
-        gather && !gather.problem
-          ? `${gather.collectors.toString()} collectors, turn back at ${gather.turnBack.toString()} chunks`
-          : undefined,
+      gather: gather
+        ? `turn back at ${gather.turnBack.toString()} chunks`
+        : undefined,
     };
   }
 

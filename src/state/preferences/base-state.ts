@@ -6,16 +6,21 @@ export interface RouteStop {
   wait?: number;
   /**
    * Turn back once the hold is full, before reaching the stop: only for the
-   * shattered planet. Collectors and chunks are worked out from the base.
+   * shattered planet.
    */
   fill?: RouteFill;
 }
 
 export interface RouteFill {
-  /** Quality level of the asteroid collectors, 0 to 5 */
+  /** Asteroid collectors on the platform */
+  collectors: number;
+  /** Their quality level, 0 to 5 */
   quality?: number;
-  /** Cargo bays on the platform, which set how many chunks it holds */
-  bays?: number;
+  /**
+   * Chunks aboard when it turns back, as in the cargo condition; blank to
+   * bring home just what the base uses in a lap
+   */
+  chunks?: number;
 }
 
 /** Where a platform flies, to estimate how long a lap takes */

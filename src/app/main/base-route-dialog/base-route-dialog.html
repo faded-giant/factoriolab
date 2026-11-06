@@ -80,6 +80,28 @@
               {{ 'base.fillTurnBack' | translate }}
             </label>
             @if (stop.fill; as fill) {
+              <label class="gap-2 flex items-center">
+                <input
+                  type="number"
+                  min="1"
+                  class="input w-20 grow-0"
+                  [value]="fill.collectors"
+                  [attr.aria-label]="'base.fillCollectors' | translate"
+                  (change)="
+                    setFill(
+                      i,
+                      'collectors',
+                      fillValue($any($event.target).value)
+                    )
+                  "
+                />
+                <lab-icon
+                  value="asteroid-collector"
+                  type="item"
+                  [labTooltip]="'asteroid-collector'"
+                  labTooltipType="item"
+                ></lab-icon>
+              </label>
               <lab-select
                 [iconOnly]="true"
                 [options]="qualityOptions()"
@@ -89,42 +111,42 @@
                 (valueChange)="setFill(i, 'quality', $event ?? undefined)"
               ></lab-select>
               <label class="gap-2 flex items-center">
-                {{ 'base.fillBays' | translate }}
+                {{ 'base.fillChunks' | translate }}
                 <input
                   type="number"
-                  min="0"
-                  class="input w-20 grow-0"
-                  [value]="fill.bays ?? 0"
-                  (change)="setFill(i, 'bays', +$any($event.target).value || 0)"
+                  min="1"
+                  class="input w-24 grow-0"
+                  [value]="fill.chunks ?? ''"
+                  [placeholder]="
+                    estimate()?.gather?.auto
+                      ? estimate()!.gather!.turnBack
+                      : ('base.fillAuto' | translate)
+                  "
+                  labTooltip="base.fillChunksTooltip"
+                  (change)="
+                    setFill(i, 'chunks', fillValue($any($event.target).value))
+                  "
                 />
               </label>
               @if (estimate()?.gather; as g) {
                 <div class="w-full text-gray-400">
-                  @if (g.problem) {
-                    <span class="text-complement-400">{{
-                      'base.fillHoldTooSmall' | translate: { hold: g.hold }
-                    }}</span>
-                  } @else {
-                    <div class="gap-1 flex items-center text-gray-200">
-                      <span class="font-mono">{{ g.collectors }}</span>
-                      <lab-icon
-                        value="asteroid-collector"
-                        type="item"
-                        [labTooltip]="'asteroid-collector'"
-                        labTooltipType="item"
-                      ></lab-icon>
+                  <div>
+                    {{
+                      'base.fillPlan'
+                        | translate
+                          : {
+                              turnBack: g.turnBack,
+                              chunks: g.chunks,
+                              km: km(g.km),
+                            }
+                    }}
+                  </div>
+                  @if (g.short; as short) {
+                    <div class="text-complement-400">
                       {{
-                        'base.fillPlan'
-                          | translate
-                            : {
-                                turnBack: g.turnBack,
-                                chunks: g.chunks,
-                                hold: g.hold,
-                              }
+                        'base.fillShort'
+                          | translate: { chunks: g.chunks, short: short }
                       }}
-                    </div>
-                    <div>
-                      {{ 'base.fillTurnsAt' | translate: { km: km(g.km) } }}
                     </div>
                   }
                   <div class="text-complement-400">

@@ -67,34 +67,25 @@ export const PROMETHIUM_CHUNK = 'promethium-asteroid-chunk';
 const EDGE = 'solar-system-edge';
 
 /**
- * PLACEHOLDERS until the real asteroid data is read in. Promethium chunks
+ * PLACEHOLDER until the real asteroid data is read in. Promethium chunks
  * rise linearly from none at the solar system edge to this many per km, per
  * collector arm, at the shattered planet. Not taken from the game.
  */
 const PLACEHOLDER_CHUNKS_PER_KM_ARM = 0.002 / 3;
 /** Collector arms: 3, and one more per quality level (from memory) */
 const collectorArms = (quality: number): number => 3 + quality;
-/** Chunks do not stack: the hub holds 65 and each cargo bay 20 more */
-const HUB_SLOTS = 65;
-const CARGO_BAY_SLOTS = 20;
-
-export function holdSlots(bays: number): number {
-  return HUB_SLOTS + CARGO_BAY_SLOTS * bays;
-}
 
 export interface GatherPlan {
-  /** Fewest collectors that keep up */
-  collectors: number;
   /** Chunks aboard when it turns back, for the cargo condition */
   turnBack: number;
   /** Chunks it brings home: as many again come in on the way back */
   chunks: number;
-  /** Chunks the hold takes */
-  hold: number;
   /** km past the solar system edge where it turns back */
   km: number;
-  /** Why it cannot keep up: even a full hold every lap is too little */
-  problem?: 'holdTooSmall';
+  /** Whether the turn back was worked out from what the base uses */
+  auto: boolean;
+  /** Chunks the base uses per lap, if a typed turn back brings fewer */
+  short?: number;
 }
 
 export interface LapEstimate {
@@ -142,14 +133,12 @@ function lapParts(
 }
 
 /**
- * Collectors and chunk target for a platform that turns back once it has
- * enough, carrying `rate` chunks per second for the base. With chunks per km
- * rising as k x / L, n collectors gather n k x^2 / 2L flying out to x km past
- * the edge and the same again flying back, so it brings home
- * c = n k x^2 / L: x = s sqrt(c), s = sqrt(L / n k), turning back at c / 2.
- * It needs a full hold every H / rate seconds, so the fewest collectors are
- * those that fill the hold in exactly that lap. Rounding them up, it brings
- * home c = rate x lap, where lap grows with sqrt(c): c = a + b sqrt(c), a
+ * Where a platform that turns back when full does so, for a base that needs
+ * `rate` chunks per second from it. With chunks per km rising as k x / L, n
+ * collectors gather n k x^2 / 2L flying out to x km past the edge and the
+ * same again flying back, so it brings home c = n k x^2 / L: x = s sqrt(c),
+ * s = sqrt(L / n k), turning back at c / 2. Bringing home just a lap's use,
+ * c = rate x lap where the lap grows with sqrt(c): c = a + b sqrt(c), a
  * quadratic in sqrt(c).
  */
 function gatherPlan(
@@ -160,33 +149,30 @@ function gatherPlan(
 ): GatherPlan | undefined {
   const length = distance(EDGE, SHATTERED_PLANET);
   const near = lapParts(stops, 0);
-  if (!length || !near || rate <= 0) return undefined;
-  const hold = holdSlots(fill.bays ?? 0);
+  if (!length || !near || !(fill.collectors > 0)) return undefined;
   const k = PLACEHOLDER_CHUNKS_PER_KM_ARM * collectorArms(fill.quality ?? 5);
-  // Longest the lap can take and still bring enough
-  const x = Math.min(length, (speed * (hold / rate - near.wait) - near.km) / 2);
-  if (x <= 0)
-    return {
-      collectors: 0,
-      turnBack: hold,
-      chunks: hold,
-      hold,
-      km: 0,
-      problem: 'holdTooSmall',
-    };
-  const collectors = Math.ceil((length * hold) / (k * x * x) - 1e-9);
-  const s = Math.sqrt(length / (collectors * k));
-  const a = rate * (near.km / speed + near.wait);
-  const b = (rate * 2 * s) / speed;
-  const root = (b + Math.sqrt(b * b + 4 * a)) / 2;
-  const chunks = Math.min(hold, Math.ceil(root * root - 1e-9));
-  return {
-    collectors,
-    turnBack: Math.ceil(chunks / 2),
+  const s = Math.sqrt(length / (fill.collectors * k));
+  const typed = fill.chunks != null && fill.chunks > 0;
+  let chunks: number;
+  if (typed) chunks = 2 * (fill.chunks ?? 0);
+  else if (rate > 0) {
+    const a = rate * (near.km / speed + near.wait);
+    const b = (rate * 2 * s) / speed;
+    const root = (b + Math.sqrt(b * b + 4 * a)) / 2;
+    chunks = Math.ceil(root * root - 1e-9);
+  } else return undefined;
+  // Not full by the shattered planet: it brings what it gathered there
+  const km = Math.min(length, s * Math.sqrt(chunks));
+  if (km >= length) chunks = Math.floor((length / s) ** 2);
+  const plan: GatherPlan = {
+    turnBack: typed ? (fill.chunks ?? 0) : Math.ceil(chunks / 2),
     chunks,
-    hold,
-    km: Math.round(Math.min(length, s * Math.sqrt(chunks))),
+    km: Math.round(km),
+    auto: !typed,
   };
+  const use = ((near.km + 2 * km) / speed + near.wait) * rate;
+  if (use > chunks + 1e-9) plan.short = Math.ceil(use - 1e-9);
+  return plan;
 }
 
 /**

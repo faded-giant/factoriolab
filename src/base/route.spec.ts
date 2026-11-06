@@ -1,12 +1,12 @@
-import { PlatformRoute } from '~/state/preferences/base-state';
+import { PlatformRoute, RouteFill } from '~/state/preferences/base-state';
 
 import { estimateLap } from './route';
 
 describe('estimateLap', () => {
-  const gatherer = (quality: number, bays: number): PlatformRoute => ({
+  const gatherer = (fill: RouteFill): PlatformRoute => ({
     stops: [
       { location: 'aquilo', wait: 60 },
-      { location: 'shattered-planet', wait: 60, fill: { quality, bays } },
+      { location: 'shattered-planet', wait: 60, fill },
     ],
     speed: 200,
   });
@@ -25,36 +25,51 @@ describe('estimateLap', () => {
   });
 
   it('should fly all the way while nothing needs chunks', () => {
-    const lap = estimateLap(gatherer(5, 10));
+    const lap = estimateLap(gatherer({ collectors: 8, quality: 5 }));
     expect(lap?.minutes).toBeCloseTo(685.3, 1);
     expect(lap?.gather).toBeUndefined();
   });
 
-  it('should size collectors and the turn back from the base', () => {
-    // 0.1 chunks/s and a 265-chunk hold: a full hold every 2650 s at most,
-    // so it may fly 159,000 km past the edge, which 8 legendary collectors
-    // reach. It then brings home 264, half of them on the way back.
-    const lap = estimateLap(gatherer(5, 10), 0.1);
+  it('should turn back once it has half a lap of what the base uses', () => {
+    // 0.1 chunks/s: it brings home 264, half of them on the way back
+    const lap = estimateLap(gatherer({ collectors: 8, quality: 5 }), 0.1);
     expect(lap?.gather).toEqual({
-      collectors: 8,
       turnBack: 132,
       chunks: 264,
-      hold: 265,
       km: 157321,
+      auto: true,
     });
     // 2 x (100,000 + 157,321) km at 200 km/s plus 60 s at Aquilo
     expect(lap?.minutes).toBeCloseTo(43.89, 2);
     expect(0.1 * lap!.minutes * 60).toBeLessThanOrEqual(264);
   });
 
-  it('should need more collectors at lower quality', () => {
-    // 3 arms instead of 8
-    expect(estimateLap(gatherer(0, 10), 0.1)?.gather?.collectors).toEqual(21);
+  it('should fly further with fewer arms at lower quality', () => {
+    const lap = estimateLap(gatherer({ collectors: 8, quality: 0 }), 0.1);
+    expect(lap?.gather?.km).toEqual(330530);
+    expect(lap?.gather?.turnBack).toEqual(219);
   });
 
-  it('should say when even a full hold is too little', () => {
-    const gather = estimateLap(gatherer(5, 0), 1)?.gather;
-    expect(gather?.problem).toEqual('holdTooSmall');
-    expect(gather?.hold).toEqual(65);
+  it('should warn when a typed turn back brings too few', () => {
+    const lap = estimateLap(
+      gatherer({ collectors: 8, quality: 5, chunks: 100 }),
+      0.1,
+    );
+    // Brings 200 in a 40.5 min lap that uses 243
+    expect(lap?.gather).toEqual({
+      turnBack: 100,
+      chunks: 200,
+      km: 136931,
+      auto: false,
+      short: 243,
+    });
+  });
+
+  it('should reach the planet if it never fills', () => {
+    const lap = estimateLap(
+      gatherer({ collectors: 1, quality: 0, chunks: 1e9 }),
+    );
+    expect(lap?.gather?.km).toEqual(4000000);
+    expect(lap?.minutes).toBeCloseTo(684.3, 1);
   });
 });
