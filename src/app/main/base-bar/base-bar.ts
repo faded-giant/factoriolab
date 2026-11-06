@@ -12,6 +12,7 @@ import {
 import { FormsModule } from '@angular/forms';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import {
+  faArrowLeftLong,
   faChevronDown,
   faChevronUp,
   faExclamationTriangle,
@@ -91,6 +92,8 @@ interface OverviewRow {
   power?: string;
   imports: OverviewItem[];
   exports: OverviewItem[];
+  /** Whether any export goes up by rocket, so the column shows silos */
+  exportSilos: boolean;
   rockets?: string;
   /** Planned generators, summed over the tab's power sources */
   generators: OverviewItem[];
@@ -178,6 +181,7 @@ export class BaseBar {
   protected readonly faXmark = faXmark;
   protected readonly faExclamationTriangle = faExclamationTriangle;
   protected readonly faChevronDown = faChevronDown;
+  protected readonly faArrowLeftLong = faArrowLeftLong;
   protected readonly faChevronUp = faChevronUp;
   protected readonly tabLabel = tabLabel;
 
@@ -281,6 +285,9 @@ export class BaseBar {
             text: `${this.itemName(itemId)} ${perMinute(rate)}`,
             silos: exportSilos.get(itemId)?.toLocaleString(),
           }),
+        ),
+        exportSilos: Object.keys(exportsFor(state, tab.id)).some((i) =>
+          exportSilos.has(i),
         ),
         generators: this.generators(state, tab.id),
         rockets: rockets.nonzero()

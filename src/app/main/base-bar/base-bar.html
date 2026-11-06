@@ -427,21 +427,37 @@
                 }
               </td>
               <td class="pe-3 py-1">
-                @for (item of row.exports; track item.itemId) {
-                  <div class="gap-1 flex items-center">
-                    <lab-icon [value]="item.itemId" type="item"></lab-icon>
-                    {{ item.text }}
-                    @if (item.silos; as silos) {
-                      <span
-                        class="gap-1 ms-2 flex items-center text-gray-400"
-                        labTooltip="base.exportSilosTooltip"
-                      >
-                        <span class="font-mono">{{ silos }}</span>
-                        <lab-icon value="rocket-silo" type="item"></lab-icon>
-                      </span>
+                @if (row.exports.length) {
+                  <div
+                    class="gap-x-1 grid items-center"
+                    [class]="
+                      row.exportSilos
+                        ? 'grid-cols-[auto_auto_auto_auto_1fr]'
+                        : 'grid-cols-[auto_1fr]'
+                    "
+                  >
+                    @for (item of row.exports; track item.itemId) {
+                      @if (row.exportSilos) {
+                        @if (item.silos; as silos) {
+                          <span class="text-right font-mono">{{ silos }}</span>
+                          <lab-icon
+                            value="rocket-silo"
+                            type="item"
+                            labTooltip="base.exportSilosTooltip"
+                          ></lab-icon>
+                          <fa-icon
+                            class="px-1 text-gray-400"
+                            [icon]="faArrowLeftLong"
+                          ></fa-icon>
+                        } @else {
+                          <span></span><span></span><span></span>
+                        }
+                      }
+                      <lab-icon [value]="item.itemId" type="item"></lab-icon>
+                      <span>{{ item.text }}</span>
                     }
                   </div>
-                } @empty {
+                } @else {
                   –
                 }
               </td>

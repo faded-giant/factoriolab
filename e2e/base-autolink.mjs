@@ -188,11 +188,15 @@ try {
       .filter((td) => td.innerText.includes('Holmium plate'))
       .map((td) => td.querySelector('lab-icon[value="rocket-silo"]'))
       .find((icon) => icon);
-    return silo ? silo.parentElement.innerText.trim() : null;
+    if (!silo) return null;
+    const count = silo.previousElementSibling?.textContent.trim();
+    const arrow = silo.nextElementSibling?.tagName === 'FA-ICON';
+    const item = silo.nextElementSibling?.nextElementSibling?.nextElementSibling?.textContent.trim().split(' ').slice(0, 2).join(' ');
+    return [count, arrow, item].join(' ');
   })()`);
   check(
-    'export shows its silos with the silo icon',
-    exportSilos === '1',
+    'export reads: 1 silo ← holmium plate',
+    exportSilos === '1 true Holmium plate',
     String(exportSilos),
   );
   check(
