@@ -67,6 +67,53 @@
           [attr.aria-label]="'base.removeStop' | translate"
           (click)="removeStop(i)"
         ></button>
+        @if (stop.canFill) {
+          <div
+            class="gap-2 ms-8 mb-1 text-sm col-span-6 flex flex-wrap items-center text-gray-300"
+          >
+            <label class="gap-2 flex items-center">
+              <input
+                type="checkbox"
+                [checked]="!!stop.fill"
+                (change)="toggleFill(i, $any($event.target).checked)"
+              />
+              {{ 'base.fillTurnBack' | translate }}
+            </label>
+            @if (stop.fill; as fill) {
+              <label class="gap-2 flex items-center">
+                {{ 'base.fillCollectors' | translate }}
+                <input
+                  type="number"
+                  min="1"
+                  class="input w-20 grow-0"
+                  [value]="fill.collectors"
+                  (change)="setFill(i, 'collectors', $any($event.target).value)"
+                />
+              </label>
+              <label class="gap-2 flex items-center">
+                {{ 'base.fillChunks' | translate }}
+                <input
+                  type="number"
+                  min="1"
+                  class="input w-24 grow-0"
+                  [value]="fill.chunks"
+                  (change)="setFill(i, 'chunks', $any($event.target).value)"
+                />
+              </label>
+              @if (estimate()?.turnaround; as t) {
+                <span class="w-full text-gray-400">
+                  {{
+                    (t.full ? 'base.fillTurnsAt' : 'base.fillNeverFull')
+                      | translate: { km: km(t.km) }
+                  }}
+                  <span class="text-complement-400">{{
+                    'base.fillPlaceholder' | translate
+                  }}</span>
+                </span>
+              }
+            }
+          </div>
+        }
       }
     </div>
   } @else {

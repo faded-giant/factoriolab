@@ -441,6 +441,7 @@ export class SyncStore {
                   stops: t.route.stops.map((s) => ({
                     location: s.location,
                     wait: s.wait,
+                    fill: s.fill,
                   })),
                   speed: t.route.speed,
                   lap: t.route.lap,

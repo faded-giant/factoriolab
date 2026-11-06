@@ -3,6 +3,8 @@ import {
   BaseState,
   BaseTab,
   PlatformRoute,
+  RouteFill,
+  RouteStop,
 } from '~/state/preferences/base-state';
 
 import { needsRocket, SPACE_PLATFORM } from './base-logic';
@@ -66,6 +68,55 @@ export interface LapEstimate {
   /** Seconds waiting in orbit */
   wait: number;
   minutes: number;
+  /** Where a platform filling up with chunks turns back */
+  turnaround?: Turnaround;
+}
+
+export const SHATTERED_PLANET = 'shattered-planet';
+const EDGE = 'solar-system-edge';
+
+/**
+ * PLACEHOLDER until the real asteroid data is read: promethium chunks rise
+ * linearly from none at the solar system edge to this many per km, per
+ * collector, at the shattered planet. Not taken from the game.
+ */
+const PLACEHOLDER_CHUNKS_PER_KM = 0.002;
+
+export interface Turnaround {
+  /** km past the solar system edge */
+  km: number;
+  /** False if it reaches the shattered planet before the hold is full */
+  full: boolean;
+}
+
+/**
+ * How far past the edge a platform flies before it holds `fill.chunks`.
+ * With chunks per km rising as k x / L, the chunks gathered by x km are
+ * n k x^2 / 2L for n collectors, so x = sqrt(2 L chunks / n k).
+ */
+export function turnaround(fill: RouteFill): Turnaround | undefined {
+  const length = distance(EDGE, SHATTERED_PLANET);
+  if (!length || fill.collectors <= 0 || fill.chunks <= 0) return undefined;
+  const km = Math.sqrt(
+    (2 * length * fill.chunks) / (fill.collectors * PLACEHOLDER_CHUNKS_PER_KM),
+  );
+  return km >= length
+    ? { km: length, full: false }
+    : { km: Math.round(km), full: true };
+}
+
+/** Where a stop is, for distances: a filling stop is short of the planet */
+function legKm(from: RouteStop, to: RouteStop): number | undefined {
+  const at = (stop: RouteStop): number | undefined =>
+    stop.location === SHATTERED_PLANET && stop.fill
+      ? turnaround(stop.fill)?.km
+      : undefined;
+  const a = at(from);
+  const b = at(to);
+  if (a != null && b != null) return Math.abs(a - b);
+  if (a != null) return a + (distance(EDGE, to.location) ?? NaN);
+  if (b != null) return (distance(from.location, EDGE) ?? NaN) + b;
+  return distance(from.location, to.location);
 }
 
 /**
@@ -77,17 +128,20 @@ export function estimateLap(route?: PlatformRoute): LapEstimate | undefined {
   if (stops.length < 2 || !route?.speed || route.speed <= 0) return undefined;
   let km = 0;
   let wait = 0;
+  let turn: Turnaround | undefined;
   for (let i = 0; i < stops.length; i++) {
-    const leg = distance(
-      stops[i].location,
-      stops[(i + 1) % stops.length].location,
-    );
-    if (leg == null) return undefined;
+    const leg = legKm(stops[i], stops[(i + 1) % stops.length]);
+    if (leg == null || Number.isNaN(leg)) return undefined;
     km += leg;
-    wait += stops[i].wait ?? 0;
+    const fill =
+      stops[i].location === SHATTERED_PLANET ? stops[i].fill : undefined;
+    const t = fill && turnaround(fill);
+    if (t) turn = t;
+    // Turning back early means never stopping there
+    if (!t?.full) wait += stops[i].wait ?? 0;
   }
   const travel = km / route.speed;
-  return { travel, wait, minutes: (travel + wait) / 60 };
+  return { travel, wait, minutes: (travel + wait) / 60, turnaround: turn };
 }
 
 /** Minutes per lap: the one typed in, else the estimate */

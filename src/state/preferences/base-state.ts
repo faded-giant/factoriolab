@@ -4,6 +4,18 @@ export interface RouteStop {
   location: string;
   /** Seconds spent in orbit before leaving */
   wait?: number;
+  /**
+   * Turn back once the hold has this many promethium chunks, before reaching
+   * the stop: only for the shattered planet
+   */
+  fill?: RouteFill;
+}
+
+export interface RouteFill {
+  /** Asteroid collectors on the platform */
+  collectors: number;
+  /** Chunks aboard when it turns back, as in the cargo condition */
+  chunks: number;
 }
 
 /** Where a platform flies, to estimate how long a lap takes */

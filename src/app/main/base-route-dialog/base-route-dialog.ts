@@ -12,14 +12,23 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 
 import { Base } from '~/base/base';
-import { distance, estimateLap, SPACE_LOCATIONS } from '~/base/route';
+import {
+  distance,
+  estimateLap,
+  SHATTERED_PLANET,
+  SPACE_LOCATIONS,
+} from '~/base/route';
 import { Button } from '~/components/button/button';
 import { DialogData } from '~/components/dialog/dialog';
 import { Icon } from '~/components/icon/icon';
 import { Select } from '~/components/select/select';
 import { Tooltip } from '~/components/tooltip/tooltip';
 import { Option } from '~/option/option';
-import { PlatformRoute, RouteStop } from '~/state/preferences/base-state';
+import {
+  PlatformRoute,
+  RouteFill,
+  RouteStop,
+} from '~/state/preferences/base-state';
 import { TranslatePipe } from '~/translate/translate-pipe';
 
 interface StopRow {
@@ -35,6 +44,9 @@ interface StopRow {
   last: boolean;
   /** Last stop equal to the first, which the route returns to anyway */
   repeatsFirst: boolean;
+  /** The shattered planet, which a gatherer can turn back short of */
+  canFill: boolean;
+  fill?: RouteFill;
 }
 
 /** Edit the stops, waits and speed of the open platform tab */
@@ -82,6 +94,8 @@ export class BaseRouteDialog implements DialogData {
         nextName: names.get(next) ?? next,
         last,
         repeatsFirst: last && i > 0 && s.location === stops[0].location,
+        canFill: s.location === SHATTERED_PLANET,
+        fill: s.fill,
       };
     });
   });
@@ -136,6 +150,27 @@ export class BaseRouteDialog implements DialogData {
     const wait = toNumber(value);
     this.setStops(
       this.route().stops.map((s, i) => (i === index ? { ...s, wait } : s)),
+    );
+  }
+
+  /** Turns back when full with these defaults, or flies all the way again */
+  toggleFill(index: number, on: boolean): void {
+    this.setStops(
+      this.route().stops.map((s, i) => {
+        if (i !== index) return s;
+        const { fill: _, ...rest } = s;
+        return on ? { ...rest, fill: { collectors: 4, chunks: 1000 } } : rest;
+      }),
+    );
+  }
+
+  setFill(index: number, field: keyof RouteFill, value: string): void {
+    const n = toNumber(value);
+    if (n == null) return;
+    this.setStops(
+      this.route().stops.map((s, i) =>
+        i === index && s.fill ? { ...s, fill: { ...s.fill, [field]: n } } : s,
+      ),
     );
   }
 
