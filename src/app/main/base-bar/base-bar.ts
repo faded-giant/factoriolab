@@ -47,6 +47,8 @@ import {
   BufferLine,
   buffers,
   carriedBy,
+  chunkRate,
+  estimateLap,
   itemSilos,
   lapMinutes,
   routeWarnings,
@@ -102,6 +104,8 @@ interface OverviewRow {
   /** For platforms */
   lap?: string;
   cargo?: string;
+  /** Collectors and cargo condition of a gatherer */
+  gather?: string;
   buffers: BufferRow[];
 }
 
@@ -495,7 +499,7 @@ export class BaseBar {
   private lapAndCargo(
     state: BaseState,
     id: string,
-  ): Pick<OverviewRow, 'lap' | 'cargo'> {
+  ): Pick<OverviewRow, 'lap' | 'cargo' | 'gather'> {
     const tab = state.tabs.find((t) => t.id === id);
     if (tab?.location !== SPACE_PLATFORM) return {};
     const station = stationAt(tab);
@@ -503,8 +507,11 @@ export class BaseBar {
       return {
         lap: `parked at ${SPACE_LOCATIONS[station] ?? this.locationName(station)}`,
       };
-    const lap = lapMinutes(tab.route);
+    const lap = lapMinutes(tab.route, chunkRate(state, id));
     if (lap == null) return {};
+    const gather = tab.route?.lap
+      ? undefined
+      : estimateLap(tab.route, chunkRate(state, id))?.gather;
     const items = this.settingsStore.dataset().itemRecord;
     let stacks = 0;
     for (const s of carriedBy(state, id)) {
@@ -516,6 +523,10 @@ export class BaseBar {
       cargo: stacks
         ? `${Math.ceil(stacks - 1e-9).toString()} stacks/lap`
         : undefined,
+      gather:
+        gather && !gather.problem
+          ? `${gather.collectors.toString()} collectors, turn back at ${gather.turnBack.toString()} chunks`
+          : undefined,
     };
   }
 

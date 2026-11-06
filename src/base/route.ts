@@ -62,92 +62,182 @@ export function distance(from: string, to: string): number | undefined {
   return undefined;
 }
 
+export const SHATTERED_PLANET = 'shattered-planet';
+export const PROMETHIUM_CHUNK = 'promethium-asteroid-chunk';
+const EDGE = 'solar-system-edge';
+
+/**
+ * PLACEHOLDERS until the real asteroid data is read in. Promethium chunks
+ * rise linearly from none at the solar system edge to this many per km, per
+ * collector arm, at the shattered planet. Not taken from the game.
+ */
+const PLACEHOLDER_CHUNKS_PER_KM_ARM = 0.002 / 3;
+/** Collector arms: 3, and one more per quality level (from memory) */
+const collectorArms = (quality: number): number => 3 + quality;
+/** Chunks do not stack: the hub holds 65 and each cargo bay 20 more */
+const HUB_SLOTS = 65;
+const CARGO_BAY_SLOTS = 20;
+
+export function holdSlots(bays: number): number {
+  return HUB_SLOTS + CARGO_BAY_SLOTS * bays;
+}
+
+export interface GatherPlan {
+  /** Fewest collectors that keep up */
+  collectors: number;
+  /** Chunks aboard when it turns back, for the cargo condition */
+  turnBack: number;
+  /** Chunks it brings home: as many again come in on the way back */
+  chunks: number;
+  /** Chunks the hold takes */
+  hold: number;
+  /** km past the solar system edge where it turns back */
+  km: number;
+  /** Why it cannot keep up: even a full hold every lap is too little */
+  problem?: 'holdTooSmall';
+}
+
 export interface LapEstimate {
   /** Seconds flying */
   travel: number;
   /** Seconds waiting in orbit */
   wait: number;
   minutes: number;
-  /** Where a platform filling up with chunks turns back */
-  turnaround?: Turnaround;
-}
-
-export const SHATTERED_PLANET = 'shattered-planet';
-const EDGE = 'solar-system-edge';
-
-/**
- * PLACEHOLDER until the real asteroid data is read: promethium chunks rise
- * linearly from none at the solar system edge to this many per km, per
- * collector, at the shattered planet. Not taken from the game.
- */
-const PLACEHOLDER_CHUNKS_PER_KM = 0.002;
-
-export interface Turnaround {
-  /** km past the solar system edge */
-  km: number;
-  /** False if it reaches the shattered planet before the hold is full */
-  full: boolean;
+  /** For a platform that fills up with chunks before the shattered planet */
+  gather?: GatherPlan;
 }
 
 /**
- * How far past the edge a platform flies before it holds `fill.chunks`.
- * With chunks per km rising as k x / L, the chunks gathered by x km are
- * n k x^2 / 2L for n collectors, so x = sqrt(2 L chunks / n k).
+ * km between two stops. With `x`, a stop that turns back when full is
+ * reached `x` km past the edge rather than at the shattered planet.
  */
-export function turnaround(fill: RouteFill): Turnaround | undefined {
-  const length = distance(EDGE, SHATTERED_PLANET);
-  if (!length || fill.collectors <= 0 || fill.chunks <= 0) return undefined;
-  const km = Math.sqrt(
-    (2 * length * fill.chunks) / (fill.collectors * PLACEHOLDER_CHUNKS_PER_KM),
-  );
-  return km >= length
-    ? { km: length, full: false }
-    : { km: Math.round(km), full: true };
-}
-
-/** Where a stop is, for distances: a filling stop is short of the planet */
-function legKm(from: RouteStop, to: RouteStop): number | undefined {
+function legKm(from: RouteStop, to: RouteStop, x?: number): number {
   const at = (stop: RouteStop): number | undefined =>
-    stop.location === SHATTERED_PLANET && stop.fill
-      ? turnaround(stop.fill)?.km
+    x != null && stop.location === SHATTERED_PLANET && stop.fill
+      ? x
       : undefined;
   const a = at(from);
   const b = at(to);
   if (a != null && b != null) return Math.abs(a - b);
   if (a != null) return a + (distance(EDGE, to.location) ?? NaN);
   if (b != null) return (distance(from.location, EDGE) ?? NaN) + b;
-  return distance(from.location, to.location);
+  return distance(from.location, to.location) ?? NaN;
+}
+
+/** km and waits of a lap; see legKm for `x` */
+function lapParts(
+  stops: RouteStop[],
+  x?: number,
+): { km: number; wait: number } | undefined {
+  let km = 0;
+  let wait = 0;
+  for (let i = 0; i < stops.length; i++) {
+    const leg = legKm(stops[i], stops[(i + 1) % stops.length], x);
+    if (Number.isNaN(leg)) return undefined;
+    km += leg;
+    // Turning back early means never stopping there
+    if (x == null || !stops[i].fill) wait += stops[i].wait ?? 0;
+  }
+  return { km, wait };
+}
+
+/**
+ * Collectors and chunk target for a platform that turns back once it has
+ * enough, carrying `rate` chunks per second for the base. With chunks per km
+ * rising as k x / L, n collectors gather n k x^2 / 2L flying out to x km past
+ * the edge and the same again flying back, so it brings home
+ * c = n k x^2 / L: x = s sqrt(c), s = sqrt(L / n k), turning back at c / 2.
+ * It needs a full hold every H / rate seconds, so the fewest collectors are
+ * those that fill the hold in exactly that lap. Rounding them up, it brings
+ * home c = rate x lap, where lap grows with sqrt(c): c = a + b sqrt(c), a
+ * quadratic in sqrt(c).
+ */
+function gatherPlan(
+  stops: RouteStop[],
+  fill: RouteFill,
+  speed: number,
+  rate: number,
+): GatherPlan | undefined {
+  const length = distance(EDGE, SHATTERED_PLANET);
+  const near = lapParts(stops, 0);
+  if (!length || !near || rate <= 0) return undefined;
+  const hold = holdSlots(fill.bays ?? 0);
+  const k = PLACEHOLDER_CHUNKS_PER_KM_ARM * collectorArms(fill.quality ?? 5);
+  // Longest the lap can take and still bring enough
+  const x = Math.min(length, (speed * (hold / rate - near.wait) - near.km) / 2);
+  if (x <= 0)
+    return {
+      collectors: 0,
+      turnBack: hold,
+      chunks: hold,
+      hold,
+      km: 0,
+      problem: 'holdTooSmall',
+    };
+  const collectors = Math.ceil((length * hold) / (k * x * x) - 1e-9);
+  const s = Math.sqrt(length / (collectors * k));
+  const a = rate * (near.km / speed + near.wait);
+  const b = (rate * 2 * s) / speed;
+  const root = (b + Math.sqrt(b * b + 4 * a)) / 2;
+  const chunks = Math.min(hold, Math.ceil(root * root - 1e-9));
+  return {
+    collectors,
+    turnBack: Math.ceil(chunks / 2),
+    chunks,
+    hold,
+    km: Math.round(Math.min(length, s * Math.sqrt(chunks))),
+  };
 }
 
 /**
  * Lap time from a route's stops and cruise speed. Time spent speeding up
- * and slowing down is not counted.
+ * and slowing down is not counted. `chunkRate` is the promethium chunks per
+ * second the platform carries, for a stop that turns back when full.
  */
-export function estimateLap(route?: PlatformRoute): LapEstimate | undefined {
+export function estimateLap(
+  route?: PlatformRoute,
+  chunkRate = 0,
+): LapEstimate | undefined {
   const stops = route?.stops ?? [];
   if (stops.length < 2 || !route?.speed || route.speed <= 0) return undefined;
-  let km = 0;
-  let wait = 0;
-  let turn: Turnaround | undefined;
-  for (let i = 0; i < stops.length; i++) {
-    const leg = legKm(stops[i], stops[(i + 1) % stops.length]);
-    if (leg == null || Number.isNaN(leg)) return undefined;
-    km += leg;
-    const fill =
-      stops[i].location === SHATTERED_PLANET ? stops[i].fill : undefined;
-    const t = fill && turnaround(fill);
-    if (t) turn = t;
-    // Turning back early means never stopping there
-    if (!t?.full) wait += stops[i].wait ?? 0;
-  }
-  const travel = km / route.speed;
-  return { travel, wait, minutes: (travel + wait) / 60, turnaround: turn };
+  const fill = stops.find(
+    (s) => s.location === SHATTERED_PLANET && s.fill,
+  )?.fill;
+  const gather = fill && gatherPlan(stops, fill, route.speed, chunkRate);
+  // Without a demand to size it by, it flies all the way
+  const parts = lapParts(stops, gather?.km);
+  if (!parts) return undefined;
+  const travel = parts.km / route.speed;
+  return {
+    travel,
+    wait: parts.wait,
+    minutes: (travel + parts.wait) / 60,
+    gather,
+  };
+}
+
+/** Promethium chunks per second a platform carries */
+export function chunkRate(base: BaseState, platformId: string): number {
+  return carriedBy(base, platformId)
+    .filter((s) => s.itemId === PROMETHIUM_CHUNK)
+    .reduce((sum, s) => sum + s.rate, 0);
 }
 
 /** Minutes per lap: the one typed in, else the estimate */
-export function lapMinutes(route?: PlatformRoute): number | undefined {
+export function lapMinutes(
+  route?: PlatformRoute,
+  chunks = 0,
+): number | undefined {
   if (route?.lap != null && route.lap > 0) return route.lap;
-  return estimateLap(route)?.minutes;
+  return estimateLap(route, chunks)?.minutes;
+}
+
+/** Minutes per lap of a platform tab, sizing any gathering from the base */
+export function platformLap(
+  base: BaseState,
+  tab: BaseTab | undefined,
+): number | undefined {
+  return tab && lapMinutes(tab.route, chunkRate(base, tab.id));
 }
 
 /** Whether a tab is a platform that flies a route, rather than staying put */
@@ -281,7 +371,10 @@ export function siloPlan(base: BaseState, id: string): SiloPlan | undefined {
   const ready = (perMinute: number, lap: number): number =>
     Math.ceil(perMinute * lap - 1e-9);
   for (const [platform, perItem] of perCarrier) {
-    const lap = lapMinutes(base.tabs.find((t) => t.id === platform)?.route);
+    const lap = platformLap(
+      base,
+      base.tabs.find((t) => t.id === platform),
+    );
     if (lap == null) {
       unknown.push(platform);
       continue;
@@ -357,7 +450,7 @@ export function buffers(base: BaseState): Record<string, BufferLine[]> {
       const source = base.tabs.find((t) => t.id === from);
       const entry = base.imports?.[tab.id]?.[itemId];
       if (!carrier || !source || !entry) continue;
-      const lap = lapMinutes(carrier.route);
+      const lap = platformLap(base, carrier);
       if (lap == null) continue;
       const amount = rational(entry.rate).toNumber() * lap * 60;
       const line = { itemId, amount, platform: carrier.id, lap };
@@ -374,20 +467,23 @@ export function buffers(base: BaseState): Record<string, BufferLine[]> {
  * a lap if that cannot be worked out
  */
 export function travelTime(
-  route: PlatformRoute | undefined,
+  base: BaseState,
+  carrier: BaseTab,
   from: string | undefined,
   to: string | undefined,
 ): number {
-  const lap = (lapMinutes(route) ?? 0) * 60;
+  const route = carrier.route;
+  const lap = (platformLap(base, carrier) ?? 0) * 60;
   const stops = route?.stops ?? [];
   const start = stops.findIndex((s) => s.location === from);
   if (route?.lap || !route?.speed || start < 0 || !to) return lap / 2;
+  const x = estimateLap(route, chunkRate(base, carrier.id))?.gather?.km;
   let seconds = 0;
   for (let n = 0; n < stops.length; n++) {
     const i = (start + n) % stops.length;
     const next = stops[(i + 1) % stops.length];
-    seconds += stops[i].wait ?? 0;
-    seconds += (distance(stops[i].location, next.location) ?? 0) / route.speed;
+    if (x == null || !stops[i].fill) seconds += stops[i].wait ?? 0;
+    seconds += (legKm(stops[i], next, x) || 0) / route.speed;
     if (next.location === to) return seconds;
   }
   return lap / 2;
@@ -420,12 +516,12 @@ export function spoilWarnings(base: BaseState): SpoilWarning[] {
     seen.add(key);
     let age = ageAt(source, itemId, seen);
     const carrier = carrierFor(base, tab, itemId);
-    const lap = carrier ? lapMinutes(carrier.route) : undefined;
+    const lap = carrier ? platformLap(base, carrier) : undefined;
     if (carrier && lap != null) {
       age += 2 * lap;
       if (source.id !== carrier.id && tab.id !== carrier.id)
         age +=
-          travelTime(carrier.route, stationAt(source), stationAt(tab)) / 60;
+          travelTime(base, carrier, stationAt(source), stationAt(tab)) / 60;
     }
     ages.set(key, age);
     return age;

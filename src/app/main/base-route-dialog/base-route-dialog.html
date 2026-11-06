@@ -80,36 +80,61 @@
               {{ 'base.fillTurnBack' | translate }}
             </label>
             @if (stop.fill; as fill) {
+              <lab-select
+                [iconOnly]="true"
+                [options]="qualityOptions()"
+                [value]="fill.quality ?? 5"
+                labTooltip="base.fillQuality"
+                [attr.aria-label]="'base.fillQuality' | translate"
+                (valueChange)="setFill(i, 'quality', $event ?? undefined)"
+              ></lab-select>
               <label class="gap-2 flex items-center">
-                {{ 'base.fillCollectors' | translate }}
+                {{ 'base.fillBays' | translate }}
                 <input
                   type="number"
-                  min="1"
+                  min="0"
                   class="input w-20 grow-0"
-                  [value]="fill.collectors"
-                  (change)="setFill(i, 'collectors', $any($event.target).value)"
+                  [value]="fill.bays ?? 0"
+                  (change)="setFill(i, 'bays', +$any($event.target).value || 0)"
                 />
               </label>
-              <label class="gap-2 flex items-center">
-                {{ 'base.fillChunks' | translate }}
-                <input
-                  type="number"
-                  min="1"
-                  class="input w-24 grow-0"
-                  [value]="fill.chunks"
-                  (change)="setFill(i, 'chunks', $any($event.target).value)"
-                />
-              </label>
-              @if (estimate()?.turnaround; as t) {
-                <span class="w-full text-gray-400">
-                  {{
-                    (t.full ? 'base.fillTurnsAt' : 'base.fillNeverFull')
-                      | translate: { km: km(t.km) }
-                  }}
-                  <span class="text-complement-400">{{
-                    'base.fillPlaceholder' | translate
-                  }}</span>
-                </span>
+              @if (estimate()?.gather; as g) {
+                <div class="w-full text-gray-400">
+                  @if (g.problem) {
+                    <span class="text-complement-400">{{
+                      'base.fillHoldTooSmall' | translate: { hold: g.hold }
+                    }}</span>
+                  } @else {
+                    <div class="gap-1 flex items-center text-gray-200">
+                      <span class="font-mono">{{ g.collectors }}</span>
+                      <lab-icon
+                        value="asteroid-collector"
+                        type="item"
+                        [labTooltip]="'asteroid-collector'"
+                        labTooltipType="item"
+                      ></lab-icon>
+                      {{
+                        'base.fillPlan'
+                          | translate
+                            : {
+                                turnBack: g.turnBack,
+                                chunks: g.chunks,
+                                hold: g.hold,
+                              }
+                      }}
+                    </div>
+                    <div>
+                      {{ 'base.fillTurnsAt' | translate: { km: km(g.km) } }}
+                    </div>
+                  }
+                  <div class="text-complement-400">
+                    {{ 'base.fillPlaceholder' | translate }}
+                  </div>
+                </div>
+              } @else {
+                <span class="w-full text-gray-400">{{
+                  'base.fillNoDemand' | translate
+                }}</span>
               }
             }
           </div>

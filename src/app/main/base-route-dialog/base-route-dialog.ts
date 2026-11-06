@@ -13,6 +13,7 @@ import {
 
 import { Base } from '~/base/base';
 import {
+  chunkRate,
   distance,
   estimateLap,
   SHATTERED_PLANET,
@@ -29,6 +30,7 @@ import {
   RouteFill,
   RouteStop,
 } from '~/state/preferences/base-state';
+import { SettingsStore } from '~/state/settings/settings-store';
 import { TranslatePipe } from '~/translate/translate-pipe';
 
 interface StopRow {
@@ -63,6 +65,7 @@ interface StopRow {
 export class BaseRouteDialog implements DialogData {
   protected readonly dialogRef = inject(DialogRef);
   protected readonly base = inject(Base);
+  private readonly settingsStore = inject(SettingsStore);
 
   readonly header = 'base.routeHeader';
 
@@ -128,7 +131,23 @@ export class BaseRouteDialog implements DialogData {
   /** Changes after each pick, so the add select resets */
   protected readonly addKey = computed(() => this.route().stops.length);
 
-  readonly estimate = computed(() => estimateLap(this.route()));
+  readonly estimate = computed(() => {
+    const state = this.base.state();
+    return estimateLap(this.route(), state ? chunkRate(state, this.id) : 0);
+  });
+
+  readonly qualityOptions = computed((): Option<number>[] => {
+    const data = this.settingsStore.dataset();
+    return data.qualityIds
+      .map((id) => data.qualityRecord[id])
+      .filter((q) => q != null)
+      .map((q) => ({
+        label: q.name,
+        value: q.level,
+        icon: q.id,
+        iconType: 'quality',
+      }));
+  });
 
   addStop(location: string | undefined): void {
     if (!location) return;
@@ -159,13 +178,12 @@ export class BaseRouteDialog implements DialogData {
       this.route().stops.map((s, i) => {
         if (i !== index) return s;
         const { fill: _, ...rest } = s;
-        return on ? { ...rest, fill: { collectors: 4, chunks: 1000 } } : rest;
+        return on ? { ...rest, fill: { quality: 5, bays: 10 } } : rest;
       }),
     );
   }
 
-  setFill(index: number, field: keyof RouteFill, value: string): void {
-    const n = toNumber(value);
+  setFill(index: number, field: keyof RouteFill, n: number | undefined): void {
     if (n == null) return;
     this.setStops(
       this.route().stops.map((s, i) =>
