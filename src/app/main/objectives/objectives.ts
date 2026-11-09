@@ -1,3 +1,4 @@
+import { Dialog } from '@angular/cdk/dialog';
 import {
   CdkDrag,
   CdkDragDrop,
@@ -15,6 +16,7 @@ import { FormsModule } from '@angular/forms';
 import {
   faBookOpen,
   faBoxOpen,
+  faGem,
   faGrip,
   faPause,
   faPlay,
@@ -32,6 +34,9 @@ import { ObjectiveForm } from '~/components/objective-form';
 import { Picker } from '~/components/picker/picker';
 import { Select } from '~/components/select/select';
 import { Tooltip } from '~/components/tooltip/tooltip';
+import { itemHasQuality } from '~/data/schema/item';
+import { baseId, qualityId } from '~/data/schema/quality';
+import { Option } from '~/option/option';
 import { rational } from '~/rational/rational';
 import { ObjectiveSettings } from '~/state/objectives/objective';
 import {
@@ -46,6 +51,7 @@ import { MaximizeType } from '~/state/settings/maximize-type';
 import { SettingsStore } from '~/state/settings/settings-store';
 import { TranslatePipe } from '~/translate/translate-pipe';
 
+import { QualityDialog } from '../quality-dialog/quality-dialog';
 import { Conversion } from './conversion';
 import { Message } from './message';
 
@@ -83,6 +89,7 @@ const host = cva(
 })
 export class Objectives {
   protected readonly conversion = inject(Conversion);
+  protected readonly dialog = inject(Dialog);
   protected readonly objectiveForm = inject(ObjectiveForm);
   protected readonly objectivesStore = inject(ObjectivesStore);
   protected readonly picker = inject(Picker);
@@ -93,7 +100,9 @@ export class Objectives {
   protected readonly displayRateOptions = displayRateOptions;
   protected readonly faBoxOpen = faBoxOpen;
   protected readonly faBookOpen = faBookOpen;
+  protected readonly faGem = faGem;
   protected readonly faGrip = faGrip;
+  protected readonly QualityDialog = QualityDialog;
   protected readonly faPause = faPause;
   protected readonly faThumbtack = faThumbtack;
   protected readonly faThumbtackSlash = faThumbtackSlash;
@@ -109,6 +118,35 @@ export class Objectives {
   protected readonly typeOptions = objectiveTypeOptions;
   protected readonly unitOptions = this.settingsStore.objectiveUnitOptions;
 
+  /** Quality levels unlocked, for the quality picker on item objectives */
+  protected readonly qualityOptions = computed((): Option<number>[] => {
+    const data = this.data();
+    const max = this.settingsStore.settings().quality?.level ?? 0;
+    return data.qualityIds
+      .map((id) => data.qualityRecord[id])
+      .filter((q) => q != null && q.level <= max)
+      .map((q) => ({
+        label: q.name,
+        value: q.level,
+        icon: q.id,
+        iconType: 'quality',
+      }));
+  });
+
+  /** Objective id -> quality level, for item objectives that come in qualities */
+  protected readonly objectiveQuality = computed(() => {
+    const data = this.data();
+    const result: Record<string, number> = {};
+    if (this.qualityOptions().length < 2) return result;
+    for (const o of this.objectives()) {
+      if (o.unit === ObjectiveUnit.Machines) continue;
+      const base = data.itemRecord[baseId(o.targetId)];
+      if (!base || !itemHasQuality(base)) continue;
+      result[o.id] = data.itemRecord[o.targetId]?.quality?.level ?? 0;
+    }
+    return result;
+  });
+
   protected readonly hostClass = computed(() =>
     host({ pin: this.preferencesStore.pinObjectives() }),
   );
@@ -123,6 +161,18 @@ export class Objectives {
     this.objectiveForm.openPicker().subscribe((value) => {
       this.objectivesStore.add(value);
     });
+  }
+
+  /** Swaps an item objective for the same item at another quality */
+  setQuality(objective: ObjectiveSettings, level: number): void {
+    const data = this.data();
+    const quality = data.qualityIds
+      .map((id) => data.qualityRecord[id])
+      .find((q) => q?.level === level);
+    if (!quality) return;
+    const targetId = qualityId(baseId(objective.targetId), quality);
+    if (data.itemRecord[targetId])
+      this.objectivesStore.updateRecord(objective.id, { targetId });
   }
 
   changeTarget(objective: ObjectiveSettings): void {

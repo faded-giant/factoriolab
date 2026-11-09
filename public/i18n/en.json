@@ -399,7 +399,34 @@
   },
   "no": "No",
   "none": "None",
+  "quality": {
+    "open": "Quality strategy",
+    "openTooltip": "Set the build's modules for making items of a higher quality",
+    "header": "Quality strategy",
+    "help": "Pick how higher quality is made. This sets the modules of every kind of machine the build uses, plus recyclers and crushers; the solver then works out the recipes, recycling loops and machine counts. Set the quality you want on each objective.",
+    "strategy": {
+      "every": "Quality in every craft",
+      "upcycle": "Upcycle",
+      "raw": "Legendary raw materials"
+    },
+    "strategyHelp": {
+      "every": "Quality modules in every machine, so each step can raise the quality.",
+      "upcycle": "Productivity modules in the crafts, quality modules in recyclers: anything short of the target is recycled and crafted again.",
+      "raw": "Quality modules in crushers, so crushing asteroid chunks yields higher-quality ores; productivity everywhere else. (In 2.1, reprocessing chunks takes no quality modules.)"
+    },
+    "modules": "Modules",
+    "tier": "Module tier",
+    "moduleQuality": "Module quality",
+    "resetRecipes": "Clear modules set on single recipes",
+    "preview": "Applying sets:",
+    "nothing": "No machines that take modules",
+    "allQualities": "Each machine at every quality. Recipes that do not allow a module fall back to your usual module ranking.",
+    "apply": "Apply",
+    "clear": "Clear",
+    "clearTooltip": "Remove the modules set on these machines, back to your usual defaults"
+  },
   "objectives": {
+    "quality": "Quality",
     "displayRate": "Display rate units",
     "error": "No solution found",
     "errorDetail": "Check <b>Limit</b> and <b>Maximize</b> objectives and enabled recipes. ",

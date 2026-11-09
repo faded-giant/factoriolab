@@ -92,6 +92,21 @@
                 rounded="start"
                 (click)="changeTarget(objective)"
               ></button>
+              @let level = objectiveQuality()[objective.id];
+              @if (level != null) {
+                <lab-select
+                  class="-ms-px shrink-0"
+                  rounded="none"
+                  [iconOnly]="true"
+                  [options]="qualityOptions()"
+                  [value]="level"
+                  labTooltip="objectives.quality"
+                  [attr.aria-label]="'objectives.quality' | translate"
+                  (valueChange)="
+                    $event != null && setQuality(objective, $event)
+                  "
+                ></lab-select>
+              }
               <lab-input-number
                 class="md:basis-1/5 -ms-px basis-1/3"
                 labelledBy="quantity-label"
@@ -200,7 +215,17 @@
       ></button>
     </div>
   </div>
-  <div class="flex items-end">
+  <div class="gap-1 sm:gap-2 flex items-end">
+    @if (qualityOptions().length > 1) {
+      <button
+        type="button"
+        labButton
+        [faIcon]="faGem"
+        text="quality.open"
+        labTooltip="quality.openTooltip"
+        (click)="dialog.open(QualityDialog)"
+      ></button>
+    }
     <lab-form-field label="objectives.displayRate">
       <lab-select
         [options]="displayRateOptions"

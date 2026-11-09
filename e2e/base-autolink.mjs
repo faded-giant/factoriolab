@@ -2,11 +2,15 @@
 // Chrome DevTools protocol. Chrome runs headless with all non-local traffic
 // sent to a dead proxy. Usage: node e2e.mjs <port-of-app-server>
 import { spawn } from 'node:child_process';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const APP = `http://127.0.0.1:${process.argv[2]}/factoriolab`;
+// E2E_BASE='' targets the dev server, which serves from the root
+const APP = `http://127.0.0.1:${process.argv[2]}${process.env.E2E_BASE ?? '/factoriolab'}`;
+// E2E_ONLY=quality runs just that section; sections: base, quality
+const ONLY = process.env.E2E_ONLY;
+const only = (section) => !ONLY || ONLY.split(',').includes(section);
 const DEBUG_PORT = 9333;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -99,27 +103,57 @@ const check = (label, ok, detail = '') => {
   if (!ok) fails++;
 };
 
+// Shared page helpers
+const click = (selector, text) =>
+  evaluate(`(() => {
+    const el = [...document.querySelectorAll(${JSON.stringify(selector)})]
+      .find((b) => b.textContent.trim() === ${JSON.stringify(text)}
+        || b.getAttribute('aria-label') === ${JSON.stringify(text)});
+    el?.click();
+    return !!el;
+  })()`);
+const type = (value) =>
+  evaluate(`(() => {
+    const input = document.activeElement;
+    if (input?.tagName !== 'INPUT') return false;
+    input.value = ${JSON.stringify(value)};
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    return true;
+  })()`);
+const savedBase = async () =>
+  JSON.parse(await evaluate(`localStorage.getItem('preferences')`)).bases.spa.T;
+const pick = async (selector, index, text) => {
+  const opened = await evaluate(`(() => {
+    const select = document.querySelectorAll(${JSON.stringify(selector)})[${index}];
+    select?.click();
+    return !!select;
+  })()`);
+  await sleep(500);
+  return opened && (await click('li[role="option"]', text));
+};
+
 try {
   await connect();
   await send('Runtime.enable');
   await send('Page.enable');
 
-  // 1. A Nauvis build making superconductors, with holmium plate imported
-  await go(`${APP}/spa/list?o=superconductor*60&v=12`, 8000);
-  const clicked = await evaluate(`(() => {
+  if (only('base')) {
+    // 1. A Nauvis build making superconductors, with holmium plate imported
+    await go(`${APP}/spa/list?o=superconductor*60&v=12`, 8000);
+    const clicked = await evaluate(`(() => {
     const label = [...document.querySelectorAll('span[aria-hidden="true"]')]
       .find((s) => s.textContent.trim() === 'Holmium plate');
     const button = label?.parentElement?.querySelector('lab-exclude-button button');
     button?.click();
     return !!button;
   })()`);
-  check('found and clicked the Holmium plate exclude button', clicked);
-  await sleep(2000);
-  const nauvisQuery = await evaluate('location.search.substring(1)');
-  check('build has a URL state', !!nauvisQuery, nauvisQuery?.slice(0, 40));
+    check('found and clicked the Holmium plate exclude button', clicked);
+    await sleep(2000);
+    const nauvisQuery = await evaluate('location.search.substring(1)');
+    check('build has a URL state', !!nauvisQuery, nauvisQuery?.slice(0, 40));
 
-  // 2. Save it as the Nauvis tab of a base, with holmium linked to Fulgora
-  await evaluate(`(() => {
+    // 2. Save it as the Nauvis tab of a base, with holmium linked to Fulgora
+    await evaluate(`(() => {
     const prefs = JSON.parse(localStorage.getItem('preferences') ?? '{}');
     prefs.states = { ...prefs.states, spa: { 'T – Nauvis': ${JSON.stringify(nauvisQuery)} } };
     prefs.bases = { spa: { T: { tabs: [
@@ -134,56 +168,56 @@ try {
     localStorage.setItem('base', JSON.stringify({ modId: 'spa', name: 'T' }));
   })()`);
 
-  // 3. Reload on an unrelated page; the base should update itself
-  await go(`${APP}/spa/list?o=iron-gear-wheel*10&v=12`, 20000);
-  const prefs = JSON.parse(
-    await evaluate(`localStorage.getItem('preferences')`),
-  );
-  const base = prefs.bases?.spa?.T;
-  const fulgoraTab = base?.tabs?.find((t) => t.id === 'fulgora');
-  const glebaTab = base?.tabs?.find((t) => t.id === 'gleba');
-  const imported = base?.imports?.nauvis?.['holmium-plate']?.rate;
-  check(
-    'Nauvis solved in background: imports holmium plate',
-    !!imported,
-    `rate/s=${imported}`,
-  );
-  check(
-    'Fulgora build created automatically',
-    !!fulgoraTab?.build && prefs.states?.spa?.[fulgoraTab.build] != null,
-    fulgoraTab?.build,
-  );
-  check(
-    'Fulgora export recorded equal to Nauvis import',
-    fulgoraTab?.applied?.['holmium-plate'] === imported,
-    JSON.stringify(fulgoraTab?.applied),
-  );
-  check(
-    'Fulgora has totals',
-    !!base?.summaries?.fulgora,
-    JSON.stringify(base?.summaries?.fulgora),
-  );
-  check('unused Gleba left alone', !glebaTab?.build);
-  const pageText = await evaluate('document.body.innerText');
-  check(
-    'page is still the unrelated gear build',
-    (await evaluate('location.search')).includes('iron-gear-wheel') ||
-      !pageText.includes('Superconductor'),
-  );
-  check('overview lists the export', pageText.includes('Holmium plate'));
-  check(
-    'no background error shown',
-    !pageText.includes('Background update failed'),
-  );
-  // Shuttle: 2 x 15000 km at 100 km/s plus 2 x 60 s waiting = 7 min. Fulgora
-  // holds 0.02 rockets/min x 7 min of holmium plate, rounded up to 1 rocket
-  check('overview shows the shuttle lap', pageText.includes('7 min'));
-  check(
-    'overview shows the silo buffer for the shuttle',
-    pageText.includes('to hold 1 rocket for Shuttle'),
-    pageText.match(/.*rocket.*for.*/)?.[0],
-  );
-  const exportSilos = await evaluate(`(() => {
+    // 3. Reload on an unrelated page; the base should update itself
+    await go(`${APP}/spa/list?o=iron-gear-wheel*10&v=12`, 20000);
+    const prefs = JSON.parse(
+      await evaluate(`localStorage.getItem('preferences')`),
+    );
+    const base = prefs.bases?.spa?.T;
+    const fulgoraTab = base?.tabs?.find((t) => t.id === 'fulgora');
+    const glebaTab = base?.tabs?.find((t) => t.id === 'gleba');
+    const imported = base?.imports?.nauvis?.['holmium-plate']?.rate;
+    check(
+      'Nauvis solved in background: imports holmium plate',
+      !!imported,
+      `rate/s=${imported}`,
+    );
+    check(
+      'Fulgora build created automatically',
+      !!fulgoraTab?.build && prefs.states?.spa?.[fulgoraTab.build] != null,
+      fulgoraTab?.build,
+    );
+    check(
+      'Fulgora export recorded equal to Nauvis import',
+      fulgoraTab?.applied?.['holmium-plate'] === imported,
+      JSON.stringify(fulgoraTab?.applied),
+    );
+    check(
+      'Fulgora has totals',
+      !!base?.summaries?.fulgora,
+      JSON.stringify(base?.summaries?.fulgora),
+    );
+    check('unused Gleba left alone', !glebaTab?.build);
+    const pageText = await evaluate('document.body.innerText');
+    check(
+      'page is still the unrelated gear build',
+      (await evaluate('location.search')).includes('iron-gear-wheel') ||
+        !pageText.includes('Superconductor'),
+    );
+    check('overview lists the export', pageText.includes('Holmium plate'));
+    check(
+      'no background error shown',
+      !pageText.includes('Background update failed'),
+    );
+    // Shuttle: 2 x 15000 km at 100 km/s plus 2 x 60 s waiting = 7 min. Fulgora
+    // holds 0.02 rockets/min x 7 min of holmium plate, rounded up to 1 rocket
+    check('overview shows the shuttle lap', pageText.includes('7 min'));
+    check(
+      'overview shows the silo buffer for the shuttle',
+      pageText.includes('to hold 1 rocket for Shuttle'),
+      pageText.match(/.*rocket.*for.*/)?.[0],
+    );
+    const exportSilos = await evaluate(`(() => {
     const silo = [...document.querySelectorAll('lab-base-bar tbody td')]
       .filter((td) => td.innerText.includes('Holmium plate'))
       .map((td) => td.querySelector('lab-icon[value="rocket-silo"]'))
@@ -194,48 +228,51 @@ try {
     const item = silo.nextElementSibling?.nextElementSibling?.nextElementSibling?.textContent.trim().split(' ').slice(0, 2).join(' ');
     return [count, arrow, item].join(' ');
   })()`);
-  check(
-    'export reads: 1 silo ← holmium plate',
-    exportSilos === '1 true Holmium plate',
-    String(exportSilos),
-  );
-  check(
-    'silo column no longer repeats the items',
-    !/to hold 1 rocket for Shuttle\s*Holmium plate/.test(pageText),
-  );
-  check(
-    'overview shows cargo per lap',
-    /\d+ stacks\/lap/.test(pageText),
-    pageText.match(/.*stacks.*/)?.[0],
-  );
-  check('no route warning', !pageText.includes('does not stop there'));
-
-  // 4. Open the Fulgora build: holmium plate objective, Fulgora-only recipes
-  if (fulgoraTab?.build) {
-    await go(`${APP}/spa/list?${prefs.states.spa[fulgoraTab.build]}`, 8000);
-    const text = await evaluate('document.body.innerText');
-    check('Fulgora build makes holmium plate', text.includes('Holmium plate'));
     check(
-      'Fulgora build uses Fulgora resources (holmium ore via scrap)',
-      /Scrap|Holmium ore/.test(text),
+      'export reads: 1 silo ← holmium plate',
+      exportSilos === '1 true Holmium plate',
+      String(exportSilos),
     );
-  }
+    check(
+      'silo column no longer repeats the items',
+      !/to hold 1 rocket for Shuttle\s*Holmium plate/.test(pageText),
+    );
+    check(
+      'overview shows cargo per lap',
+      /\d+ stacks\/lap/.test(pageText),
+      pageText.match(/.*stacks.*/)?.[0],
+    );
+    check('no route warning', !pageText.includes('does not stop there'));
 
-  // 5. Open the Nauvis tab, double the objective in the UI: Fulgora follows
-  await go(`${APP}/spa/list?o=iron-gear-wheel*10&v=12`, 6000);
-  const opened = await evaluate(`(() => {
+    // 4. Open the Fulgora build: holmium plate objective, Fulgora-only recipes
+    if (fulgoraTab?.build) {
+      await go(`${APP}/spa/list?${prefs.states.spa[fulgoraTab.build]}`, 8000);
+      const text = await evaluate('document.body.innerText');
+      check(
+        'Fulgora build makes holmium plate',
+        text.includes('Holmium plate'),
+      );
+      check(
+        'Fulgora build uses Fulgora resources (holmium ore via scrap)',
+        /Scrap|Holmium ore/.test(text),
+      );
+    }
+
+    // 5. Open the Nauvis tab, double the objective in the UI: Fulgora follows
+    await go(`${APP}/spa/list?o=iron-gear-wheel*10&v=12`, 6000);
+    const opened = await evaluate(`(() => {
     const tab = [...document.querySelectorAll('lab-base-bar button')]
       .find((b) => b.textContent.trim() === 'Nauvis');
     tab?.click();
     return !!tab;
   })()`);
-  check('clicked the Nauvis tab', opened);
-  await sleep(6000);
-  check(
-    'Nauvis build is on screen',
-    (await evaluate('location.search')).includes('superconductor'),
-  );
-  const edited = await evaluate(`(() => {
+    check('clicked the Nauvis tab', opened);
+    await sleep(6000);
+    check(
+      'Nauvis build is on screen',
+      (await evaluate('location.search')).includes('superconductor'),
+    );
+    const edited = await evaluate(`(() => {
     const input = document.querySelector('lab-objectives input');
     if (!input) return false;
     input.focus();
@@ -245,323 +282,295 @@ try {
     input.blur();
     return true;
   })()`);
-  check('changed the objective to 120/min', edited);
-  await sleep(10000);
-  const after = JSON.parse(
-    await evaluate(`localStorage.getItem('preferences')`),
-  );
-  const b2 = after.bases.spa.T;
-  const nauvisSaved = after.states.spa['T – Nauvis'];
-  check(
-    'edit autosaved into the Nauvis build',
-    nauvisSaved.includes('superconductor*120'),
-    nauvisSaved.slice(0, 40),
-  );
-  check(
-    'Nauvis import doubled',
-    b2.imports?.nauvis?.['holmium-plate']?.rate === '2/3',
-    b2.imports?.nauvis?.['holmium-plate']?.rate,
-  );
-  const f2 = b2.tabs.find((t) => t.id === 'fulgora');
-  check(
-    'Fulgora export followed without opening it',
-    f2.applied?.['holmium-plate'] === '2/3',
-    JSON.stringify(f2.applied),
-  );
-  const fulgoraQuery = after.states.spa[f2.build];
-  check(
-    'Fulgora build objective updated (40/min)',
-    fulgoraQuery.includes('holmium-plate*40'),
-    fulgoraQuery.slice(0, 60),
-  );
+    check('changed the objective to 120/min', edited);
+    await sleep(10000);
+    const after = JSON.parse(
+      await evaluate(`localStorage.getItem('preferences')`),
+    );
+    const b2 = after.bases.spa.T;
+    const nauvisSaved = after.states.spa['T – Nauvis'];
+    check(
+      'edit autosaved into the Nauvis build',
+      nauvisSaved.includes('superconductor*120'),
+      nauvisSaved.slice(0, 40),
+    );
+    check(
+      'Nauvis import doubled',
+      b2.imports?.nauvis?.['holmium-plate']?.rate === '2/3',
+      b2.imports?.nauvis?.['holmium-plate']?.rate,
+    );
+    const f2 = b2.tabs.find((t) => t.id === 'fulgora');
+    check(
+      'Fulgora export followed without opening it',
+      f2.applied?.['holmium-plate'] === '2/3',
+      JSON.stringify(f2.applied),
+    );
+    const fulgoraQuery = after.states.spa[f2.build];
+    check(
+      'Fulgora build objective updated (40/min)',
+      fulgoraQuery.includes('holmium-plate*40'),
+      fulgoraQuery.slice(0, 60),
+    );
 
-  // Fulgora launches the holmium plate to Nauvis, so it also makes rocket
-  // parts: 50 per rocket launched
-  const parts = f2.applied?.['rocket-part'];
-  check('Fulgora makes rocket parts for its launches', !!parts, parts);
-  check(
-    'Fulgora build has a rocket part objective',
-    fulgoraQuery.includes('rocket-part'),
-    fulgoraQuery.slice(0, 80),
-  );
-  const nauvisApplied = b2.tabs.find((t) => t.id === 'nauvis').applied ?? {};
-  check(
-    'Nauvis launches nothing',
-    !('rocket-part' in nauvisApplied),
-    JSON.stringify(nauvisApplied),
-  );
+    // Fulgora launches the holmium plate to Nauvis, so it also makes rocket
+    // parts: 50 per rocket launched
+    const parts = f2.applied?.['rocket-part'];
+    check('Fulgora makes rocket parts for its launches', !!parts, parts);
+    check(
+      'Fulgora build has a rocket part objective',
+      fulgoraQuery.includes('rocket-part'),
+      fulgoraQuery.slice(0, 80),
+    );
+    const nauvisApplied = b2.tabs.find((t) => t.id === 'nauvis').applied ?? {};
+    check(
+      'Nauvis launches nothing',
+      !('rocket-part' in nauvisApplied),
+      JSON.stringify(nauvisApplied),
+    );
 
-  // 6. Name a new platform, rename it, then delete it
-  const click = (selector, text) =>
-    evaluate(`(() => {
-      const el = [...document.querySelectorAll(${JSON.stringify(selector)})]
-        .find((b) => b.textContent.trim() === ${JSON.stringify(text)}
-          || b.getAttribute('aria-label') === ${JSON.stringify(text)});
-      el?.click();
-      return !!el;
-    })()`);
-  const type = (value) =>
-    evaluate(`(() => {
-      const input = document.activeElement;
-      if (input?.tagName !== 'INPUT') return false;
-      input.value = ${JSON.stringify(value)};
-      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-      return true;
-    })()`);
-  const savedBase = async () =>
-    JSON.parse(await evaluate(`localStorage.getItem('preferences')`)).bases.spa
-      .T;
+    // 6. Name a new platform, rename it, then delete it
 
-  check('clicked + Platform', await click('lab-base-bar button', 'Platform'));
-  await sleep(500);
-  check('typed the platform name', await type('Iron Ship'));
-  await sleep(1000);
-  let ship = (await savedBase()).tabs.find((t) => t.label === 'Iron Ship');
-  check(
-    'platform created with its name',
-    ship?.location === 'space-platform',
-    JSON.stringify(ship),
-  );
-  check(
-    'opened the platform tab',
-    await click('lab-base-bar button', 'Iron Ship'),
-  );
-  await sleep(6000);
-  check('clicked rename', await click('lab-base-bar button', 'Rename tab'));
-  await sleep(500);
-  check('typed the new name', await type('Copper Ship'));
-  await sleep(2000);
-  const prefs3 = JSON.parse(
-    await evaluate(`localStorage.getItem('preferences')`),
-  );
-  ship = prefs3.bases.spa.T.tabs.find((t) => t.id === ship?.id);
-  check(
-    'platform renamed',
-    ship?.label === 'Copper Ship',
-    JSON.stringify(ship),
-  );
-  check(
-    'its build renamed with it',
-    ship?.build === 'T – Copper Ship' &&
-      prefs3.states.spa['T – Copper Ship'] != null &&
-      prefs3.states.spa['T – Iron Ship'] == null,
-    ship?.build,
-  );
-  check('clicked delete', await click('lab-base-bar button', 'Delete tab'));
-  await sleep(500);
-  check('confirmed', await click('button', 'Delete'));
-  await sleep(1000);
-  check(
-    'platform deleted',
-    !(await savedBase()).tabs.some((t) => t.id === ship?.id),
-  );
-
-  // The route dialog shows the shuttle's estimated lap
-  check(
-    'opened the shuttle tab',
-    await click('lab-base-bar button', 'Shuttle'),
-  );
-  await sleep(6000);
-  check('clicked Route', await click('lab-base-bar button', 'Route'));
-  await sleep(1000);
-  const dialogText = await evaluate(
-    `document.querySelector('lab-base-route-dialog')?.innerText ?? ''`,
-  );
-  check(
-    'route dialog estimates the lap',
-    dialogText.includes('Estimated lap: 7 min (5 min flying, 2 min waiting)'),
-    dialogText.match(/Estimated.*/)?.[0],
-  );
-  await evaluate(
-    `document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`,
-  );
-  await sleep(500);
-
-  // Power: plan Nauvis with solar and nuclear in the power panel on its tab
-  const pick = async (selector, index, text) => {
-    const opened = await evaluate(`(() => {
-      const select = document.querySelectorAll(${JSON.stringify(selector)})[${index}];
-      select?.click();
-      return !!select;
-    })()`);
+    check('clicked + Platform', await click('lab-base-bar button', 'Platform'));
     await sleep(500);
-    return opened && (await click('li[role="option"]', text));
-  };
-  const addSelect = 'lab-select[aria-label="Add power source"]';
-  const powerTable = () =>
-    evaluate(`(() => {
+    check('typed the platform name', await type('Iron Ship'));
+    await sleep(1000);
+    let ship = (await savedBase()).tabs.find((t) => t.label === 'Iron Ship');
+    check(
+      'platform created with its name',
+      ship?.location === 'space-platform',
+      JSON.stringify(ship),
+    );
+    check(
+      'opened the platform tab',
+      await click('lab-base-bar button', 'Iron Ship'),
+    );
+    await sleep(6000);
+    check('clicked rename', await click('lab-base-bar button', 'Rename tab'));
+    await sleep(500);
+    check('typed the new name', await type('Copper Ship'));
+    await sleep(2000);
+    const prefs3 = JSON.parse(
+      await evaluate(`localStorage.getItem('preferences')`),
+    );
+    ship = prefs3.bases.spa.T.tabs.find((t) => t.id === ship?.id);
+    check(
+      'platform renamed',
+      ship?.label === 'Copper Ship',
+      JSON.stringify(ship),
+    );
+    check(
+      'its build renamed with it',
+      ship?.build === 'T – Copper Ship' &&
+        prefs3.states.spa['T – Copper Ship'] != null &&
+        prefs3.states.spa['T – Iron Ship'] == null,
+      ship?.build,
+    );
+    check('clicked delete', await click('lab-base-bar button', 'Delete tab'));
+    await sleep(500);
+    check('confirmed', await click('button', 'Delete'));
+    await sleep(1000);
+    check(
+      'platform deleted',
+      !(await savedBase()).tabs.some((t) => t.id === ship?.id),
+    );
+
+    // The route dialog shows the shuttle's estimated lap
+    check(
+      'opened the shuttle tab',
+      await click('lab-base-bar button', 'Shuttle'),
+    );
+    await sleep(6000);
+    check('clicked Route', await click('lab-base-bar button', 'Route'));
+    await sleep(1000);
+    const dialogText = await evaluate(
+      `document.querySelector('lab-base-route-dialog')?.innerText ?? ''`,
+    );
+    check(
+      'route dialog estimates the lap',
+      dialogText.includes('Estimated lap: 7 min (5 min flying, 2 min waiting)'),
+      dialogText.match(/Estimated.*/)?.[0],
+    );
+    await evaluate(
+      `document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`,
+    );
+    await sleep(500);
+
+    // Power: plan Nauvis with solar and nuclear in the power panel on its tab
+    const addSelect = 'lab-select[aria-label="Add power source"]';
+    const powerTable = () =>
+      evaluate(`(() => {
       const tables = document.querySelectorAll('lab-base-bar table');
       return tables[0]?.innerText ?? '';
     })()`);
-  // The panel should change when edited and once more when solved, and not
-  // ripple through every background pass in between
-  const watchTable = async (ms) => {
-    const seen = [];
-    for (let t = 0; t < ms; t += 100) {
-      const now = (await powerTable()).replace(/\s+/g, ' ');
-      if (seen.at(-1) !== now) seen.push(now);
-      await sleep(100);
-    }
-    return seen;
-  };
-  const nauvisTab = async () =>
-    (await savedBase()).tabs.find((t) => t.id === 'nauvis');
-  // On Fulgora's own steps, the exported holmium goes to its silo
-  check('opened Fulgora', await click('lab-base-bar button', 'Fulgora'));
-  await sleep(6000);
-  const expanded = await evaluate(`(() => {
+    // The panel should change when edited and once more when solved, and not
+    // ripple through every background pass in between
+    const watchTable = async (ms) => {
+      const seen = [];
+      for (let t = 0; t < ms; t += 100) {
+        const now = (await powerTable()).replace(/\s+/g, ' ');
+        if (seen.at(-1) !== now) seen.push(now);
+        await sleep(100);
+      }
+      return seen;
+    };
+    const nauvisTab = async () =>
+      (await savedBase()).tabs.find((t) => t.id === 'nauvis');
+    // On Fulgora's own steps, the exported holmium goes to its silo
+    check('opened Fulgora', await click('lab-base-bar button', 'Fulgora'));
+    await sleep(6000);
+    const expanded = await evaluate(`(() => {
     const buttons = document.querySelectorAll('button[aria-label="Show details"]');
     buttons.forEach((b) => b.click());
     return buttons.length;
   })()`);
-  await sleep(1500);
-  const silosText = await evaluate(`(() =>
+    await sleep(1500);
+    const silosText = await evaluate(`(() =>
     [...document.querySelectorAll('[labtooltip="steps.exportSilosTooltip"], span')]
       .map((e) => e.textContent.trim())
       .find((t) => /^\\d+ silos?$/.test(t)) ?? null)()`);
-  check(
-    'Fulgora steps send holmium to "1 silo"',
-    silosText === '1 silo',
-    `${expanded} expanded, found ${silosText}`,
-  );
-  check(
-    'opened Nauvis for power',
-    await click('lab-base-bar button', 'Nauvis'),
-  );
-  await sleep(6000);
-  check('added solar to Nauvis', await pick(addSelect, 0, 'Solar panels'));
-  await sleep(3000);
-  let text = await powerTable();
-  check(
-    'solar row lists panels and accumulators',
-    /Solar panel × [\d,]+/.test(text) && /Accumulator × [\d,]+/.test(text),
-    text.replace(/\s+/g, ' ').slice(0, 240),
-  );
-  check(
-    'added nuclear to Nauvis',
-    await pick(addSelect, 0, 'Nuclear reactors'),
-  );
-  await sleep(2000);
-  const shared = await evaluate(`(() => {
+    check(
+      'Fulgora steps send holmium to "1 silo"',
+      silosText === '1 silo',
+      `${expanded} expanded, found ${silosText}`,
+    );
+    check(
+      'opened Nauvis for power',
+      await click('lab-base-bar button', 'Nauvis'),
+    );
+    await sleep(6000);
+    check('added solar to Nauvis', await pick(addSelect, 0, 'Solar panels'));
+    await sleep(3000);
+    let text = await powerTable();
+    check(
+      'solar row lists panels and accumulators',
+      /Solar panel × [\d,]+/.test(text) && /Accumulator × [\d,]+/.test(text),
+      text.replace(/\s+/g, ' ').slice(0, 240),
+    );
+    check(
+      'added nuclear to Nauvis',
+      await pick(addSelect, 0, 'Nuclear reactors'),
+    );
+    await sleep(2000);
+    const shared = await evaluate(`(() => {
     const input = document.querySelector('input[aria-label="Share"]');
     if (!input) return false;
     input.value = '40%';
     input.dispatchEvent(new Event('change', { bubbles: true }));
     return true;
   })()`);
-  check('set solar to 40%', shared);
-  let frames = await watchTable(12000);
-  check(
-    'power table holds still while it solves',
-    frames.length <= 3,
-    `${frames.length} versions`,
-  );
-  let nauvis = await nauvisTab();
-  check(
-    'two sources saved, solar at 40%',
-    nauvis.power?.length === 2 &&
-      nauvis.power[0].percent === 40 &&
-      nauvis.power[1].source === 'nuclear',
-    JSON.stringify(nauvis.power),
-  );
-  text = await powerTable();
-  check(
-    'nuclear covers the rest, with fuel cells',
-    /Nuclear reactor × \d+/.test(text) &&
-      /Uranium fuel cell [\d.]+\/min/.test(text) &&
-      !text.includes('not covered'),
-    text.replace(/\s+/g, ' ').slice(0, 400),
-  );
-  const cells1 = nauvis.applied?.['uranium-fuel-cell'];
-  check('fuel cells applied to Nauvis', cells1 != null, cells1);
-  const nauvisQ = JSON.parse(
-    await evaluate(`localStorage.getItem('preferences')`),
-  ).states.spa['T – Nauvis'];
-  check(
-    'Nauvis build makes the fuel cells',
-    nauvisQ.includes('uranium-fuel-cell*'),
-    nauvisQ.slice(0, 90),
-  );
-  await sleep(8000);
-  nauvis = await nauvisTab();
-  check(
-    'power demand settles',
-    nauvis.applied?.['uranium-fuel-cell'] === cells1,
-    `${cells1} -> ${nauvis.applied?.['uranium-fuel-cell']}`,
-  );
-  check(
-    'switched nuclear to steam turbines',
-    await pick(
-      'lab-base-bar table tbody lab-select',
-      2,
-      'Steam turbines (steam made in the build)',
-    ),
-  );
-  frames = await watchTable(12000);
-  check(
-    'switching source changes the table at most twice',
-    frames.length <= 3,
-    `${frames.length} versions`,
-  );
-  nauvis = await nauvisTab();
-  check(
-    'turbines swap fuel cells for steam',
-    nauvis.applied?.steam != null &&
-      nauvis.applied?.['uranium-fuel-cell'] == null,
-    JSON.stringify(nauvis.applied),
-  );
-  check(
-    'switched turbines to boilers',
-    await pick(
-      'lab-base-bar table tbody lab-select',
-      2,
-      'Steam engines and boilers',
-    ),
-  );
-  await sleep(2000);
-  check(
-    'picked rocket fuel for the boilers',
-    await pick('lab-base-bar table tbody lab-select', 4, 'Rocket fuel'),
-  );
-  await sleep(12000);
-  nauvis = await nauvisTab();
-  text = await powerTable();
-  check(
-    'boilers burn rocket fuel, made in the build',
-    nauvis.applied?.['rocket-fuel'] != null &&
-      nauvis.applied?.['steam-165'] == null &&
-      nauvis.applied?.steam == null &&
-      /Boiler × \d+/.test(text),
-    JSON.stringify(nauvis.applied),
-  );
-  for (let n = 0; n < 2; n++) {
-    await click('lab-base-bar button', 'Remove power source');
-    await sleep(1500);
-  }
-  await sleep(8000);
-  nauvis = await nauvisTab();
-  check(
-    'removing the sources removes the fuel',
-    nauvis.power == null && nauvis.applied?.steam == null,
-    JSON.stringify(nauvis.applied),
-  );
+    check('set solar to 40%', shared);
+    let frames = await watchTable(12000);
+    check(
+      'power table holds still while it solves',
+      frames.length <= 3,
+      `${frames.length} versions`,
+    );
+    let nauvis = await nauvisTab();
+    check(
+      'two sources saved, solar at 40%',
+      nauvis.power?.length === 2 &&
+        nauvis.power[0].percent === 40 &&
+        nauvis.power[1].source === 'nuclear',
+      JSON.stringify(nauvis.power),
+    );
+    text = await powerTable();
+    check(
+      'nuclear covers the rest, with fuel cells',
+      /Nuclear reactor × \d+/.test(text) &&
+        /Uranium fuel cell [\d.]+\/min/.test(text) &&
+        !text.includes('not covered'),
+      text.replace(/\s+/g, ' ').slice(0, 400),
+    );
+    const cells1 = nauvis.applied?.['uranium-fuel-cell'];
+    check('fuel cells applied to Nauvis', cells1 != null, cells1);
+    const nauvisQ = JSON.parse(
+      await evaluate(`localStorage.getItem('preferences')`),
+    ).states.spa['T – Nauvis'];
+    check(
+      'Nauvis build makes the fuel cells',
+      nauvisQ.includes('uranium-fuel-cell*'),
+      nauvisQ.slice(0, 90),
+    );
+    await sleep(8000);
+    nauvis = await nauvisTab();
+    check(
+      'power demand settles',
+      nauvis.applied?.['uranium-fuel-cell'] === cells1,
+      `${cells1} -> ${nauvis.applied?.['uranium-fuel-cell']}`,
+    );
+    check(
+      'switched nuclear to steam turbines',
+      await pick(
+        'lab-base-bar table tbody lab-select',
+        2,
+        'Steam turbines (steam made in the build)',
+      ),
+    );
+    frames = await watchTable(12000);
+    check(
+      'switching source changes the table at most twice',
+      frames.length <= 3,
+      `${frames.length} versions`,
+    );
+    nauvis = await nauvisTab();
+    check(
+      'turbines swap fuel cells for steam',
+      nauvis.applied?.steam != null &&
+        nauvis.applied?.['uranium-fuel-cell'] == null,
+      JSON.stringify(nauvis.applied),
+    );
+    check(
+      'switched turbines to boilers',
+      await pick(
+        'lab-base-bar table tbody lab-select',
+        2,
+        'Steam engines and boilers',
+      ),
+    );
+    await sleep(2000);
+    check(
+      'picked rocket fuel for the boilers',
+      await pick('lab-base-bar table tbody lab-select', 4, 'Rocket fuel'),
+    );
+    await sleep(12000);
+    nauvis = await nauvisTab();
+    text = await powerTable();
+    check(
+      'boilers burn rocket fuel, made in the build',
+      nauvis.applied?.['rocket-fuel'] != null &&
+        nauvis.applied?.['steam-165'] == null &&
+        nauvis.applied?.steam == null &&
+        /Boiler × \d+/.test(text),
+      JSON.stringify(nauvis.applied),
+    );
+    for (let n = 0; n < 2; n++) {
+      await click('lab-base-bar button', 'Remove power source');
+      await sleep(1500);
+    }
+    await sleep(8000);
+    nauvis = await nauvisTab();
+    check(
+      'removing the sources removes the fuel',
+      nauvis.power == null && nauvis.applied?.steam == null,
+      JSON.stringify(nauvis.applied),
+    );
 
-  // 8. Platform chain: an egg shuttle brings biter eggs from Nauvis to a
-  // barge parked at Aquilo, which hands them to the promethium gatherer
-  await go(`${APP}/spa/list?o=promethium-science-pack*10&v=12`, 8000);
-  const eggExcluded = await evaluate(`(() => {
+    // 8. Platform chain: an egg shuttle brings biter eggs from Nauvis to a
+    // barge parked at Aquilo, which hands them to the promethium gatherer
+    await go(`${APP}/spa/list?o=promethium-science-pack*10&v=12`, 8000);
+    const eggExcluded = await evaluate(`(() => {
     const label = [...document.querySelectorAll('span[aria-hidden="true"]')]
       .find((s) => s.textContent.trim() === 'Biter egg');
     const button = label?.parentElement?.querySelector('lab-exclude-button button');
     button?.click();
     return !!button;
   })()`);
-  check('excluded biter eggs on the gatherer', eggExcluded);
-  await sleep(2000);
-  const gathererQuery = await evaluate('location.search.substring(1)');
-  const iex = /iex=[^&]+/.exec(gathererQuery)?.[0];
-  check('gatherer build has the exclusion', !!iex, gathererQuery);
-  await evaluate(`(() => {
+    check('excluded biter eggs on the gatherer', eggExcluded);
+    await sleep(2000);
+    const gathererQuery = await evaluate('location.search.substring(1)');
+    const iex = /iex=[^&]+/.exec(gathererQuery)?.[0];
+    check('gatherer build has the exclusion', !!iex, gathererQuery);
+    await evaluate(`(() => {
     const prefs = JSON.parse(localStorage.getItem('preferences'));
     prefs.states.spa['C – Gatherer'] = ${JSON.stringify(gathererQuery)};
     prefs.states.spa['C – Barge'] = ${JSON.stringify(`${iex}&v=12`)};
@@ -579,91 +588,152 @@ try {
     localStorage.setItem('preferences', JSON.stringify(prefs));
     localStorage.setItem('base', JSON.stringify({ modId: 'spa', name: 'C' }));
   })()`);
-  await go(`${APP}/spa/list?o=iron-gear-wheel*10&v=12`, 25000);
-  const chain = JSON.parse(
-    await evaluate(`localStorage.getItem('preferences')`),
-  ).bases.spa.C;
-  const eggs = chain.imports?.gatherer?.['biter-egg']?.rate;
-  const tabOf = (id) => chain.tabs.find((t) => t.id === id);
-  check('gatherer imports biter eggs', !!eggs, eggs);
-  check(
-    'barge passes the eggs on: exports what the gatherer takes',
-    tabOf('barge').applied?.['biter-egg'] === eggs,
-    JSON.stringify(tabOf('barge').applied),
-  );
-  check(
-    'barge imports exactly that from Nauvis',
-    chain.imports?.barge?.['biter-egg']?.rate === eggs,
-    JSON.stringify(chain.imports?.barge),
-  );
-  check(
-    'Nauvis makes the eggs, plus rocket parts to launch them',
-    tabOf('nauvis').applied?.['biter-egg'] === eggs &&
-      !!tabOf('nauvis').applied?.['rocket-part'],
-    JSON.stringify(tabOf('nauvis').applied),
-  );
-  const chainText = await evaluate('document.body.innerText');
-  check(
-    'barge holds eggs between shuttle drops',
-    chainText.includes('between Egg shuttle drops'),
-  );
-  check(
-    'barge holds eggs ready for the gatherer',
-    chainText.includes('ready for Gatherer'),
-  );
-  check('relay is not flagged', !chainText.includes('so it would import it'));
-  check(
-    'no route warnings',
-    !chainText.includes('does not stop there') &&
-      !chainText.includes('which also moves'),
-  );
-  // Shuttle lap 9.5 min, gatherer lap 20 min: up to 2 x 9.5 + 4.75 + 2 x 20
-  // = 63.75 min, past the 30 min eggs last
-  check(
-    'warns that eggs spoil',
-    chainText.includes(
-      'Biter egg can be up to 64 min old when used, but spoils after 30 min',
-    ),
-    chainText.match(/.*spoils after.*/)?.[0],
-  );
+    await go(`${APP}/spa/list?o=iron-gear-wheel*10&v=12`, 25000);
+    const chain = JSON.parse(
+      await evaluate(`localStorage.getItem('preferences')`),
+    ).bases.spa.C;
+    const eggs = chain.imports?.gatherer?.['biter-egg']?.rate;
+    const tabOf = (id) => chain.tabs.find((t) => t.id === id);
+    check('gatherer imports biter eggs', !!eggs, eggs);
+    check(
+      'barge passes the eggs on: exports what the gatherer takes',
+      tabOf('barge').applied?.['biter-egg'] === eggs,
+      JSON.stringify(tabOf('barge').applied),
+    );
+    check(
+      'barge imports exactly that from Nauvis',
+      chain.imports?.barge?.['biter-egg']?.rate === eggs,
+      JSON.stringify(chain.imports?.barge),
+    );
+    check(
+      'Nauvis makes the eggs, plus rocket parts to launch them',
+      tabOf('nauvis').applied?.['biter-egg'] === eggs &&
+        !!tabOf('nauvis').applied?.['rocket-part'],
+      JSON.stringify(tabOf('nauvis').applied),
+    );
+    const chainText = await evaluate('document.body.innerText');
+    check(
+      'barge holds eggs between shuttle drops',
+      chainText.includes('between Egg shuttle drops'),
+    );
+    check(
+      'barge holds eggs ready for the gatherer',
+      chainText.includes('ready for Gatherer'),
+    );
+    check('relay is not flagged', !chainText.includes('so it would import it'));
+    check(
+      'no route warnings',
+      !chainText.includes('does not stop there') &&
+        !chainText.includes('which also moves'),
+    );
+    // Shuttle lap 9.5 min, gatherer lap 20 min: up to 2 x 9.5 + 4.75 + 2 x 20
+    // = 63.75 min, past the 30 min eggs last
+    check(
+      'warns that eggs spoil',
+      chainText.includes(
+        'Biter egg can be up to 64 min old when used, but spoils after 30 min',
+      ),
+      chainText.match(/.*spoils after.*/)?.[0],
+    );
 
-  // 9. The demo base, made from the library with one click
-  await go(`${APP}/spa/list`, 8000);
-  check('opened the library', await click('button', 'Build library'));
-  await sleep(1000);
-  check('clicked Load demo base', await click('button', 'Load demo base'));
-  await sleep(45000);
-  const demo = JSON.parse(await evaluate(`localStorage.getItem('preferences')`))
-    .bases.spa.Demo;
-  const demoTab = (id) => demo?.tabs.find((t) => t.id === id);
-  check(
-    'demo: Fulgora exports holmium plate and rocket parts',
-    !!demoTab('fulgora')?.applied?.['holmium-plate'] &&
-      !!demoTab('fulgora')?.applied?.['rocket-part'],
-    JSON.stringify(demoTab('fulgora')?.applied),
-  );
-  check(
-    'demo: barge passes on the eggs Nauvis sends',
-    !!demoTab('barge')?.applied?.['biter-egg'] &&
-      demoTab('barge').applied['biter-egg'] ===
-        demoTab('nauvis')?.applied?.['biter-egg'],
-    JSON.stringify(demoTab('nauvis')?.applied),
-  );
-  const demoText = await evaluate('document.body.innerText');
-  for (const s of [
-    'parked at Aquilo',
-    'between Egg shuttle drops',
-    'ready for Promethium gatherer',
-    'for Holmium shuttle',
-    'spoils after 30 min',
-  ])
-    check(`demo overview shows "${s}"`, demoText.includes(s));
+    // 9. The demo base, made from the library with one click
+    await go(`${APP}/spa/list`, 8000);
+    check('opened the library', await click('button', 'Build library'));
+    await sleep(1000);
+    check('clicked Load demo base', await click('button', 'Load demo base'));
+    await sleep(45000);
+    const demo = JSON.parse(
+      await evaluate(`localStorage.getItem('preferences')`),
+    ).bases.spa.Demo;
+    const demoTab = (id) => demo?.tabs.find((t) => t.id === id);
+    check(
+      'demo: Fulgora exports holmium plate and rocket parts',
+      !!demoTab('fulgora')?.applied?.['holmium-plate'] &&
+        !!demoTab('fulgora')?.applied?.['rocket-part'],
+      JSON.stringify(demoTab('fulgora')?.applied),
+    );
+    check(
+      'demo: barge passes on the eggs Nauvis sends',
+      !!demoTab('barge')?.applied?.['biter-egg'] &&
+        demoTab('barge').applied['biter-egg'] ===
+          demoTab('nauvis')?.applied?.['biter-egg'],
+      JSON.stringify(demoTab('nauvis')?.applied),
+    );
+    const demoText = await evaluate('document.body.innerText');
+    for (const s of [
+      'parked at Aquilo',
+      'between Egg shuttle drops',
+      'ready for Promethium gatherer',
+      'for Holmium shuttle',
+      'spoils after 30 min',
+    ])
+      check(`demo overview shows "${s}"`, demoText.includes(s));
 
-  // 7. A brand-new Space Age build starts on the legendary 4-beacon preset
-  await go(`${APP}/spa/list`, 8000);
-  const fresh = await evaluate('location.search');
-  check('new build uses the default preset', fresh.includes('mpr=6'), fresh);
-
+    // 7. A brand-new Space Age build starts on the legendary 4-beacon preset
+    await go(`${APP}/spa/list`, 8000);
+    const fresh = await evaluate('location.search');
+    check('new build uses the default preset', fresh.includes('mpr=6'), fresh);
+  }
+  if (only('quality')) {
+    // 10. Quality: ask for legendary gears, then try two strategies. The
+    // solver picks the cheapest route; the strategy only sets the modules
+    await go(`${APP}/2x1/list?o=iron-gear-wheel*10&mpr=5&v=12`, 10000);
+    check(
+      'objective quality picked: legendary',
+      await pick('lab-select[aria-label="Quality"]', 0, 'Legendary'),
+    );
+    await sleep(4000);
+    const legendaryQuery = await evaluate('location.search');
+    check(
+      'objective is now legendary gears',
+      legendaryQuery.includes('iron-gear-wheel(5)'),
+      legendaryQuery.slice(0, 80),
+    );
+    const downloads = mkdtempSync(join(profile, 'csv-'));
+    await send('Browser.setDownloadBehavior', {
+      behavior: 'allow',
+      downloadPath: downloads,
+    });
+    // The steps as CSV name each recipe, machine and its modules
+    const stepsCsv = async () => {
+      for (const f of readdirSync(downloads))
+        if (f.endsWith('.csv')) rmSync(join(downloads, f));
+      await click('lab-steps button', 'Download as CSV');
+      await sleep(2000);
+      const file = readdirSync(downloads).find((f) => f.endsWith('.csv'));
+      return file
+        ? readFileSync(join(downloads, file), 'utf8').split('\n')
+        : [];
+    };
+    const gearRow = (lines) =>
+      lines.find((l) => /^iron-gear-wheel\(5\),/.test(l)) ?? '';
+    for (const [name, module] of [
+      ['Upcycle', 'productivity-module-3(5)'],
+      ['Quality in every craft', 'quality-module-3(5)'],
+    ]) {
+      await click('lab-objectives button', 'Quality strategy');
+      await sleep(1000);
+      const picked = await evaluate(`(() => {
+      const label = [...document.querySelectorAll('lab-quality-dialog label')]
+        .find((l) => l.textContent.includes(${JSON.stringify(name)}));
+      label?.querySelector('input')?.click();
+      return !!label;
+    })()`);
+      await sleep(300);
+      check(
+        `applied "${name}"`,
+        picked && (await click('lab-quality-dialog button', 'Apply')),
+      );
+      await sleep(8000);
+      const lines = await stepsCsv();
+      const gears = gearRow(lines);
+      check(
+        `"${name}" makes legendary gears with ${module}`,
+        gears.includes(`4 ${module}`),
+        gears.slice(0, 260) || `${lines.length} CSV lines`,
+      );
+    }
+  }
   check(
     'no uncaught errors in the page',
     errors.length === 0,

@@ -1,0 +1,98 @@
+<p class="text-sm text-gray-300">{{ 'quality.help' | translate }}</p>
+
+<div class="gap-2 flex flex-col" role="radiogroup">
+  @for (s of strategies; track s) {
+    <label
+      class="gap-2 p-2 rounded-xs flex cursor-pointer items-start border"
+      [class.border-brand-400]="strategy() === s"
+      [class.border-gray-700]="strategy() !== s"
+    >
+      <input
+        type="radio"
+        name="strategy"
+        class="mt-1"
+        [checked]="strategy() === s"
+        (change)="strategy.set(s)"
+      />
+      <span>
+        <span class="block">{{ 'quality.strategy.' + s | translate }}</span>
+        <span class="text-sm block text-gray-400">{{
+          'quality.strategyHelp.' + s | translate
+        }}</span>
+      </span>
+    </label>
+  }
+</div>
+
+<div class="gap-3 flex flex-wrap items-center">
+  <span class="gap-2 text-sm flex items-center text-gray-300">
+    {{ 'quality.modules' | translate }}
+    <lab-select
+      [iconOnly]="true"
+      [options]="tierOptions()"
+      [value]="tier()"
+      labTooltip="quality.tier"
+      [attr.aria-label]="'quality.tier' | translate"
+      (valueChange)="$event != null && tier.set($event)"
+    ></lab-select>
+    <lab-select
+      [iconOnly]="true"
+      [options]="qualityOptions()"
+      [value]="quality()"
+      labTooltip="quality.moduleQuality"
+      [attr.aria-label]="'quality.moduleQuality' | translate"
+      (valueChange)="$event != null && quality.set($event)"
+    ></lab-select>
+  </span>
+  <label class="gap-2 text-sm flex items-center text-gray-300">
+    <input
+      type="checkbox"
+      [checked]="resetRecipes()"
+      (change)="resetRecipes.set($any($event.target).checked)"
+    />
+    {{ 'quality.resetRecipes' | translate }}
+  </label>
+</div>
+
+<div class="gap-1 text-sm flex flex-col">
+  <span class="text-gray-300">{{ 'quality.preview' | translate }}</span>
+  @for (line of preview().lines; track line.machine) {
+    <div class="gap-1 flex items-center">
+      <lab-icon
+        [value]="line.machine"
+        type="item"
+        [labTooltip]="line.machine"
+        labTooltipType="item"
+      ></lab-icon>
+      <span class="px-1 text-gray-400">←</span>
+      <lab-icon
+        [value]="line.module"
+        type="item"
+        [labTooltip]="line.module"
+        labTooltipType="item"
+      ></lab-icon>
+    </div>
+  } @empty {
+    <span class="text-gray-400">{{ 'quality.nothing' | translate }}</span>
+  }
+  <span class="text-xs text-gray-400">{{
+    'quality.allQualities' | translate
+  }}</span>
+</div>
+
+<div class="gap-2 flex justify-end">
+  <button
+    type="button"
+    labButton
+    text="quality.clear"
+    labTooltip="quality.clearTooltip"
+    (click)="clear()"
+  ></button>
+  <button
+    type="button"
+    labButton
+    color="brand"
+    text="quality.apply"
+    (click)="apply()"
+  ></button>
+</div>
