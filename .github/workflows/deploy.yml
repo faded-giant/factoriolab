@@ -64,3 +64,7 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+        # Pages can sit in syncing_files well past the 10 min default for
+        # ~100 MB of data; wait longer instead of cancelling the deploy
+        with:
+          timeout: 1800000
